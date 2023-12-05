@@ -1,16 +1,16 @@
 import asyncio
+import logging
+import sys
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
+from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 
-from ..config.config import BOT_API_TOKEN, filesharings
+from config import BOT_API_TOKEN, filesharings
 
 
-bot = Bot(BOT_API_TOKEN)
-
-dp = Dispatcher(bot)
-
+dp = Dispatcher()
 
 @dp.message(CommandStart())
 async def start(message: Message):
@@ -19,13 +19,14 @@ async def start(message: Message):
     await message.reply('Отправь мне ссылку на файлообменник')
 
 
-@dp.message(F.text in filesharings)
-async def check_link(message: Message):
-    await message.reply(message.text)
-
-
-async def run():
+async def run_bot():
     '''Запуск бота'''
 
-    await bot.delete_webhook(drop_pending_updates=True)
+    bot = Bot(BOT_API_TOKEN, parse_mode=ParseMode.HTML)
+
     await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    asyncio.run(run_bot())
