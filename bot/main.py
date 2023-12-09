@@ -1,22 +1,27 @@
-import asyncio
-import logging
-import sys
-
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 
-from config import BOT_API_TOKEN, filesharings
-
+from config.config import BOT_API_TOKEN
+from map.main import check_filesharing
 
 dp = Dispatcher()
+
 
 @dp.message(CommandStart())
 async def start(message: Message):
     '''Стартовое сообщение'''
 
     await message.reply('Отправь мне ссылку на файлообменник')
+
+
+@dp.message()
+async def get_filesharing(message: Message):
+    '''Проверка на файлообменник'''
+
+    user_id = message.from_user
+    await message.reply(await check_filesharing(text=message.text, user=user_id))
 
 
 async def run_bot():
@@ -27,6 +32,3 @@ async def run_bot():
     await dp.start_polling(bot)
 
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    asyncio.run(run_bot())
