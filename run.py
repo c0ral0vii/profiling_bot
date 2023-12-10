@@ -1,11 +1,11 @@
 import asyncio
 import logging
 import sys
-import requests
 
 from bot.main import run_bot
-from map.main import check_imgs
+from ocr.main import check_img
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    asyncio.run(run_bot())
+    # asyncio.run(run_bot())
+    check_img()
