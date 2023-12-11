@@ -3,6 +3,7 @@ from aiogram.types import Message
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 
+from .middlewares import ValidAccounts
 from config.config import BOT_API_TOKEN
 from map.main import check_filesharing
 
@@ -13,6 +14,7 @@ dp = Dispatcher()
 async def start(message: Message):
     '''Стартовое сообщение'''
 
+    print(message.from_user.id)
     await message.reply('Отправь мне ссылку на файлообменник')
 
 

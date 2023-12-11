@@ -18,5 +18,8 @@ imgs_dir = 'map/temp/imgs/'
 # Путь к фотографиям
 file_path = os.path.join(imgs_dir, filename)
 
-
+# Апи токен бота
 BOT_API_TOKEN = os.getenv('BOT_API_TOKEN')
+
+# Пользователи которые могут работать с ботом
+allowed_users = [944360812,]

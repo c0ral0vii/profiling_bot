@@ -7,5 +7,4 @@ from ocr.main import check_img
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    # asyncio.run(run_bot())
-    check_img()
+    asyncio.run(run_bot())
