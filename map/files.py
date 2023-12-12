@@ -21,11 +21,19 @@ def delete_imgs() -> None:
         os.remove(os.path.join(imgs_dir, file))
 
 
-def create_coordinate_file(cords: list) -> True:
+def create_coordinate_file(cords: dict) -> True:
     filename = 'coordinates.txt'
     map_folder = 'map/temp'
     filepath = os.path.join(map_folder, filename)
 
     with open(filepath, 'w') as f:
-        for cord in cords:
-            f.write(f'\n{cord}')
+        for path, coord in cords.items():
+            f.write(f'\n{coord}')
+
+
+def change_img_name(ready_coords: dict) -> None:
+    '''Изменение названий файлов в координаты.jpg'''
+    
+    for img_path, coords in ready_coords.items():
+        new_name = f'{coords}.jpg'
+        os.replace(img_path, os.path.join(imgs_dir, new_name))

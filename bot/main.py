@@ -23,6 +23,8 @@ async def get_filesharing(message: Message):
     '''Проверка на файлообменник'''
 
     user_id = message.from_user
+    await message.reply(await check_filesharing(f'Идёт обработка, пожалуйста подождите...'))
+    await check_filesharing(text=message.text, user=user_id)
     await message.reply(await check_filesharing(text=message.text, user=user_id))
 
 
