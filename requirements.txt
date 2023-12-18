@@ -3,5 +3,9 @@ python-dotenv
 beautifulsoup4
 lxml
 requests
+aiohttp
 paddlepaddle
 paddleocr
+fake-useragent
+selenium
+webdriver_manager

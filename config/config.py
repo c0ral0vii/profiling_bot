@@ -13,10 +13,12 @@ filesharings = ['postimg', 'files']
 filename = 'image_' + str(uuid.uuid4()) + '.jpg'
 
 # Путь к фотографиям
-imgs_dir = 'map/temp/imgs/'
+def generate_path(user):
+    print(user)
+    return f'map/generate_map/{user}/temp/imgs/'
 
 # Путь к фотографиям
-file_path = os.path.join(imgs_dir, filename)
+# file_path = os.path.join(imgs_dir, filename)
 
 # Апи токен бота
 BOT_API_TOKEN = os.getenv('BOT_API_TOKEN')

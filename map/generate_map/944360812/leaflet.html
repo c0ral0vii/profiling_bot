@@ -1,41 +1,4 @@
-import re
-
-from ocr.main import check_img
-from .parsing import get_imgs
-
-
-async def check_filesharing(text: str, user: str):
-    '''Проверка является ли текст файлообменником'''
-
-    await get_imgs(url=text, user=user)
-
-    result = check_img(user=user)
-
-    if text.find('postimg.cc'):
-        generate_map(coords=result, user=user, jpg_change=False)
-    else:
-        generate_map(coords=result, user=user, jpg_change=True)
-    
-    return
-
-
-def generate_map(coords: dict, user: str, jpg_change: bool):
-    '''Генерация карты'''
-
-    ready_coords = {}
-    for url, coord in coords.items():
-        if jpg_change:
-            url = url.replace("'", '/').replace('.jpg', '')
-        else:
-            url = url.replace("'", '/')
-        new_url = re.findall(r'(https?://\S+)', url)
-        ready_coords.setdefault(new_url[0], coord)
-
-    create_html(coords=ready_coords, user=user)
-
-
-def create_html(coords: dict, user: str):
-    html_one = '''<!DOCTYPE HTML>
+<!DOCTYPE HTML>
     <html lang="en">
     <head>
         <meta charset="utf-8" />
@@ -57,8 +20,7 @@ def create_html(coords: dict, user: str):
     </head>
     <body>
         <div id="map"></div>
-        <script>'''
-    html_two = r'''
+        <script>var coordinates = {'https://i.postimg.cc/bJkg0nJd/387-F5-AD8-E1-D5-4-A0-A-BC8-B-E5-A16-B3-C45-BD.jpg': [' 54.985234', ' 82.891444'], 'https://i.postimg.cc/q7tjRSHs/2-F9824-E2-623-B-4-C71-97-E3-5-B4072-E85-B43.jpg': ['54.984779', '82.872129'], 'https://i.postimg.cc/JzYpRmv7/ADECAFEA-424-B-4795-A9-EB-243-A3-BB99-DA4.jpg': [' 54.982443', ' 82.870069'], 'https://i.postimg.cc/wMzVwBy2/F76-B2-B05-C597-4-F1-D-A89-E-80-C86842047-F.jpg': [' 55.029020', ' 82.916879'], 'https://i.postimg.cc/MppskXsr/28-D7-EE37-D5-E2-4724-AA98-CDCCBBA61-A4-C.jpg': ['54.988739', '82.886217'], 'https://i.postimg.cc/SKwVzdmw/E9004-BE8-86-FA-4-ABA-9574-B7-A90-F2162-D5.jpg': [' 55.030357', ' 82.917162']};
     function getDistance(coord1, coord2) {
                 var lat1 = coord1[0], lon1 = coord1[1];
                 var lat2 = coord2[0], lon2 = coord2[1];
@@ -135,10 +97,4 @@ def create_html(coords: dict, user: str):
             });
         </script>
     </body>
-    </html>'''
-
-    options = f'var coordinates = {coords};'
-    gen_map = f'map/generate_map/{user}/leaflet.html'
-
-    with open(gen_map, 'w') as file:
-        file.write(html_one + options + html_two)
+    </html>

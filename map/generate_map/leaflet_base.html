@@ -1,0 +1,67 @@
+<!DOCTYPE HTML>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <style>
+      html, body {
+        height: 100%;
+        padding: 0;
+        margin: 0;
+      }
+      #map {
+        /* configure the size of the map */
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script>
+    
+      // initialize Leaflet
+      var map = L.map('map', {
+        center: [51.82311, 55.167591],
+        zoom: 15
+      });
+
+      L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      // Fetch coordinates from the file
+
+        var markers = coordinates.map(coord => {
+            var marker = L.marker(coord).addTo(map);
+            var circle = L.circle(coord, {
+                color: 'blue',
+                fillColor: '#f03',
+                fillOpacity: 0.3,
+                radius: 10
+            }).addTo(map);
+
+            // Создайте всплывающее окно с изображением
+            var imageUrl = `temp/imgs/${coord[0]},${coord[1]}.jpg`;
+            var popupContent = `<img src="${imageUrl}" alt="${coord[0]}, ${coord[1]}" width="300" height="400">`;
+            var popup = L.popup().setContent(popupContent);
+
+            // Откройте всплывающее окно при нажатии на маркер
+            marker.on('click', function(e) {
+                popup.setLatLng(e.latlng);
+                popup.openOn(map);
+            });
+
+            // Закройте всплывающее окно при нажатии в любом месте на карте
+            map.on('click', function() {
+                map.closePopup();
+            });
+
+            return marker;
+        });
+
+    </script>
+  </body>
+</html>
