@@ -7,6 +7,7 @@ from map.files import check_files
 
 ocr = PaddleOCR(use_angle_cls=True, lang='en')
 
+
 def process_img(img_path):
     img = Image.open(img_path)
     if isinstance(img, np.ndarray):

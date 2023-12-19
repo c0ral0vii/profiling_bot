@@ -78,7 +78,7 @@ async def get_imgs(url: str, user: str):
         all_links = soup.find_all('div', class_='thumb')
 
         for template in all_links:
-            print(template)
+            print(all_links.a)
 
 
     if url.find('postimg.cc'):

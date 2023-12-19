@@ -13,13 +13,14 @@ async def check_filesharing(text: str, user: str):
 
     if text.find('postimg.cc'):
         generate_map(coords=result, user=user, jpg_change=False)
-    else:
-        generate_map(coords=result, user=user, jpg_change=True)
+        return
+
+    generate_map(coords=result, user=user)
     
     return
 
 
-def generate_map(coords: dict, user: str, jpg_change: bool):
+def generate_map(coords: dict, user: str, jpg_change: bool = True):
     '''Генерация карты'''
 
     ready_coords = {}

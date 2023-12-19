@@ -6,12 +6,13 @@ from config.config import generate_path
 
 def create_new_user(user: str):
     '''Создание папки для пользователя'''
+
     try:
         os.mkdir(f'map/generate_map/{user}')
         os.mkdir(f'map/generate_map/{user}/temp')
         os.mkdir(f'map/generate_map/{user}/temp/imgs')
-    except:
-        return
+    except Exception as ex:
+        print(ex)
 
 
 def check_files(user: str) -> list:

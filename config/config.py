@@ -14,7 +14,6 @@ filename = 'image_' + str(uuid.uuid4()) + '.jpg'
 
 # Путь к фотографиям
 def generate_path(user):
-    print(user)
     return f'map/generate_map/{user}/temp/imgs/'
 
 # Путь к фотографиям
