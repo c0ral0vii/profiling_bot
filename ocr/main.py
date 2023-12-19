@@ -29,6 +29,7 @@ def process_img(img_path):
         coordinates.setdefault(img_path, ready_coords)
     return coordinates
 
+
 def check_img(user: str) -> dict:
     '''PaddleOCR смотрит фотографию и ищит координаты на нём'''
     imgs_path = check_files(user=user)

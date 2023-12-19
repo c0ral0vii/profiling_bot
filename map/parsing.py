@@ -4,7 +4,7 @@ import time
 
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriver
-from selenium.webdriver.chromium.service import Service
+from selenium.webdriver.chromium.service import ChromiumService
 from bs4 import BeautifulSoup
 from config.config import generate_path
 from .files import delete_imgs, unzip_imgs, rename_imgs
@@ -23,18 +23,16 @@ def download_photos(url: str, user: int) -> bool:
 
     chrome_options.add_experimental_option('prefs', prefs)
     chrome_options.headless = True
-    service = Service(executable_path=ChromeDriver().install())
+    service = ChromiumService(executable_path=ChromeDriver().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
         driver.get(url)
 
         time.sleep(5)
-
         download_click = driver.find_element('xpath', '//a[@class="head_download__button"]').click()
         time.sleep(0.5)
         download_zip = driver.find_element('xpath', '//a[@id="head_download_zip_button"]').click()
-
         time.sleep(12)
         
     except Exception as ex:
@@ -77,8 +75,12 @@ async def get_imgs(url: str, user: str):
 
         unzip = unzip_imgs(user=user)
         
-        all_links = soup.find_all()
-            
+        all_links = soup.find_all('div', class_='thumb')
+
+        for template in all_links:
+            print(template)
+
+
     if url.find('postimg.cc'):
         # postimg
         img_links = soup.find_all('a', class_='img')
