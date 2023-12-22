@@ -1,10 +1,12 @@
 import aiohttp
+import asyncio
 import os
 import time
 
+from multiprocessing import Pool
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriver
-from selenium.webdriver.chromium.service import ChromiumService
+from selenium.webdriver.chrome.service import Service
 from bs4 import BeautifulSoup
 from config.config import generate_path
 from .files import delete_imgs, unzip_imgs, rename_imgs
@@ -23,17 +25,17 @@ def download_photos(url: str, user: int) -> bool:
 
     chrome_options.add_experimental_option('prefs', prefs)
     chrome_options.headless = True
-    service = ChromiumService(executable_path=ChromeDriver().install())
+    service = Service(executable_path=ChromeDriver().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
 
     try:
         driver.get(url)
 
-        time.sleep(5)
+        asyncio.sleep(5)
         download_click = driver.find_element('xpath', '//a[@class="head_download__button"]').click()
-        time.sleep(0.5)
+        asyncio.sleep(0.5)
         download_zip = driver.find_element('xpath', '//a[@id="head_download_zip_button"]').click()
-        time.sleep(12)
+        asyncio.sleep(12)
         
     except Exception as ex:
         print(ex)
@@ -78,7 +80,8 @@ async def get_imgs(url: str, user: str):
         all_links = soup.find_all('div', class_='thumb')
 
         for template in all_links:
-            print(all_links.a)
+            img_link = template.get('img').get('src')
+            print(img_link)
 
 
     if url.find('postimg.cc'):

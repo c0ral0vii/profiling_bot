@@ -52,7 +52,7 @@ def unzip_imgs(user: int) -> bool:
     return True
 
 
-def rename_imgs(user: int, rename_to: str, rename_from: str):
+async def rename_imgs(user: int, rename_to: str, rename_from: str):
     '''Переназвать фотографии в ссылку, для использования на карте'''
 
     os.rename(f'map/generate_map/{user}/temp/imgs/{rename_from}',
