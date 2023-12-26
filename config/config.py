@@ -22,5 +22,5 @@ def generate_path(user):
 # Апи токен бота
 BOT_API_TOKEN = os.getenv('BOT_API_TOKEN')
 
-# Пользователи которые могут работать с ботом
+# Пользователи, которые могут работать с ботом
 allowed_users = [944360812,]

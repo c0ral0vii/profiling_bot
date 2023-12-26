@@ -1,5 +1,3 @@
-import re
-
 from ocr.main import check_img
 from .parsing import get_imgs
 
@@ -7,32 +5,13 @@ from .parsing import get_imgs
 async def check_filesharing(text: str, user: str):
     '''Проверка является ли текст файлообменником'''
 
-    await get_imgs(url=text, user=user)
+    img_urls = await get_imgs(url=text, user=user)
 
-    result = check_img(user=user)
+    result = check_img(img_urls=img_urls)
 
-    if text.find('postimg.cc'):
-        generate_map(coords=result, user=user, jpg_change=False)
-        return
-
-    generate_map(coords=result, user=user)
+    create_html(coords=result, user=user)
     
     return
-
-
-def generate_map(coords: dict, user: str, jpg_change: bool = True):
-    '''Генерация карты'''
-
-    ready_coords = {}
-    for url, coord in coords.items():
-        if jpg_change:
-            url = url.replace("'", '/').replace('.jpg', '')
-        else:
-            url = url.replace("'", '/')
-        new_url = re.findall(r'(https?://\S+)', url)
-        ready_coords.setdefault(new_url[0], coord)
-
-    create_html(coords=ready_coords, user=user)
 
 
 def create_html(coords: dict, user: str):

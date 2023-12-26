@@ -5,7 +5,6 @@ from aiogram.types import Message, FSInputFile
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 
-from .middlewares import ValidAccounts
 from config.config import BOT_API_TOKEN, filesharings
 from map.files import create_new_user
 from map.main import check_filesharing
@@ -33,7 +32,7 @@ async def get_filesharing(message: Message):
     if result:
         await message.reply(f'Идёт обработка, подождите....')
         await check_filesharing(text=message.text, user=user_id)
-        await message.reply_document(FSInputFile(path=f'map/generate_map/{user_id}/leaflet.html'), caption="Готово")
+        await message.reply_document(FSInputFile(path=f'map/generate_map/{str(user_id)}/leaflet.html'), caption="Готово")
     else:
         await message.reply(f'В сообщени нет ссылки поддерживаемой нашим ботом')
 

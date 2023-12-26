@@ -1,6 +1,5 @@
 from aiogram import BaseMiddleware
 from aiogram.types import Message
-from config.config import allowed_users
 
 
 class ValidAccounts(BaseMiddleware):

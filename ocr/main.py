@@ -1,22 +1,26 @@
 import numpy as np
 import re
+import urllib.request
+
+from io import BytesIO
 from paddleocr import PaddleOCR
 from multiprocessing import Pool
-from PIL import Image, ImageOps
-from map.files import check_files
-
-ocr = PaddleOCR(use_angle_cls=True, lang='en')
+from PIL import Image
 
 
-def process_img(img_path: list) -> dict:
+ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=True)
+
+
+def process_img(img_urls: str) -> dict:
     '''Обработка фотографии'''
 
-    img = Image.open(img_path)
-    if isinstance(img, np.ndarray):
-        img = Image.fromarray(img)
-    img = ImageOps.invert(img.convert('RGB'))
+    with urllib.request.urlopen(img_urls) as u:
+        raw_data = u.read()
 
-    result = ocr.ocr(np.array(img), cls=True)
+    img = Image.open(BytesIO(raw_data))
+    img = np.array(img)
+
+    result = ocr.ocr(img, cls=True)
 
     two_cords = []
     coordinates = {}
@@ -25,26 +29,24 @@ def process_img(img_path: list) -> dict:
         for word_info in line:
             coord = re.findall(r'(\s*\d{2,}\.\d{4,6}\s*)', word_info[1][0])
             if len(coord) == 2:
-                coordinates[img_path] = coord
+                coordinates[img_urls] = coord
             if len(coord) == 1:
                 two_cords.append(coord)
 
-    for coord in two_cords:
+    for _ in two_cords:
         ready_coords = []
         for cord in two_cords:
             ready_coords.append(*cord)
-        coordinates.setdefault(img_path, ready_coords)
+        coordinates.setdefault(img_urls, ready_coords)
 
     return coordinates
 
 
-def check_img(user: str) -> dict:
+def check_img(img_urls: list) -> dict:
     '''PaddleOCR смотрит фотографию и ищет координаты на нём'''
 
-    imgs_path = check_files(user=user)
-
     with Pool(processes=2) as pool:
-        results = pool.map(process_img, imgs_path)
+        results = pool.map(process_img, img_urls)
 
     coordinates = {k: v for result in results for k, v in result.items()}
 
