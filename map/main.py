@@ -15,6 +15,8 @@ async def check_filesharing(text: str, user: str):
 
 
 def create_html(coords: dict, user: str):
+    coords = {url: coord for url, coord in coords.items() if len(coord) >= 2}
+
     html_one = '''<!DOCTYPE HTML>
     <html lang="en">
     <head>
@@ -33,12 +35,21 @@ def create_html(coords: dict, user: str):
             width: 100%;
             height: 100%;
         }
+        .leaflet-tooltip {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
         </style>
     </head>
     <body>
         <div id="map"></div>
         <script>'''
     html_two = r'''
+    // Получаем первый элемент из объекта coordinates
+    var firstKey = Object.keys(coordinates)[0];
+    var firstValue = coordinates[firstKey];
+
     function getDistance(coord1, coord2) {
                 var lat1 = coord1[0], lon1 = coord1[1];
                 var lat2 = coord2[0], lon2 = coord2[1];
@@ -59,7 +70,7 @@ def create_html(coords: dict, user: str):
             
             // initialize Leaflet
             var map = L.map('map', {
-                center: [51.82412, 55.16614],
+                center: firstValue,
                 zoom: 15
             });
             
@@ -69,13 +80,8 @@ def create_html(coords: dict, user: str):
             
             Object.entries(coordinates).forEach(([imageUrl, coord]) => {
                 var marker = L.marker(coord).addTo(map);
-                var circle = L.circle(coord,  {
-                    color: 'blue',
-                    fillColor: '#f03',
-                    fillOpacity: 0.3,
-                    radius: 20
-                }).addTo(map);
                 
+
                 // Вычислите расстояние до ближайшего маркера
                 var minDistance = Infinity;
                 var closestCoord;
@@ -120,5 +126,5 @@ def create_html(coords: dict, user: str):
     options = f'var coordinates = {coords};'
     gen_map = f'map/generate_map/{user}/leaflet.html'
 
-    with open(gen_map, 'w') as file:
+    with open(gen_map, 'w', encoding='utf-8') as file:
         file.write(html_one + options + html_two)

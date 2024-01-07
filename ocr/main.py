@@ -1,6 +1,7 @@
 import numpy as np
 import re
 import urllib.request
+import ssl
 
 from io import BytesIO
 from paddleocr import PaddleOCR
@@ -8,16 +9,20 @@ from multiprocessing import Pool
 from PIL import Image
 
 
-ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=True)
+ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False)
 
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
 
 def process_img(img_urls: str) -> dict:
     '''Обработка фотографии'''
 
-    with urllib.request.urlopen(img_urls) as u:
+    with urllib.request.urlopen(img_urls, context=ctx) as u:
         raw_data = u.read()
 
     img = Image.open(BytesIO(raw_data))
+    img = img.convert('L')
     img = np.array(img)
 
     result = ocr.ocr(img, cls=True)
@@ -38,14 +43,14 @@ def process_img(img_urls: str) -> dict:
         for cord in two_cords:
             ready_coords.append(*cord)
         coordinates.setdefault(img_urls, ready_coords)
-
+    
     return coordinates
 
 
 def check_img(img_urls: list) -> dict:
     '''PaddleOCR смотрит фотографию и ищет координаты на нём'''
 
-    with Pool(processes=2) as pool:
+    with Pool(processes=1) as pool:
         results = pool.map(process_img, img_urls)
 
     coordinates = {k: v for result in results for k, v in result.items()}
