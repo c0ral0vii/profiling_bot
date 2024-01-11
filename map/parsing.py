@@ -18,7 +18,7 @@ async def get_page(url: str):
     return page
 
 
-async def get_imgs(url: str, user: str):
+async def get_imgs(url: str, user: int):
     '''Получение фотографий с файлообменника'''
     
     

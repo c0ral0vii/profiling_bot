@@ -2,7 +2,7 @@ from ocr.main import check_img
 from .parsing import get_imgs
 
 
-async def check_filesharing(text: str, user: str):
+async def check_filesharing(text: str, user: int):
     '''Проверка является ли текст файлообменником'''
 
     img_urls = await get_imgs(url=text, user=user)
@@ -14,7 +14,7 @@ async def check_filesharing(text: str, user: str):
     return
 
 
-def create_html(coords: dict, user: str):
+def create_html(coords: dict, user: int):
     coords = {url: coord for url, coord in coords.items() if len(coord) >= 2}
 
     html_one = '''<!DOCTYPE HTML>
@@ -46,78 +46,80 @@ def create_html(coords: dict, user: str):
         <div id="map"></div>
         <script>'''
     html_two = r'''
-    // Получаем первый элемент из объекта coordinates
-    var firstKey = Object.keys(coordinates)[0];
-    var firstValue = coordinates[firstKey];
-
-    function getDistance(coord1, coord2) {
-                var lat1 = coord1[0], lon1 = coord1[1];
-                var lat2 = coord2[0], lon2 = coord2[1];
-            
-                var R = 6371e3; // радиус Земли в метрах
-                var φ1 = lat1 * Math.PI/180; // φ, λ в радианах
-                var φ2 = lat2 * Math.PI/180;
-                var Δφ = (lat2-lat1) * Math.PI/180;
-                var Δλ = (lon2-lon1) * Math.PI/180;
-            
-                var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                        Math.cos(φ1) * Math.cos(φ2) *
-                        Math.sin(Δλ/2) * Math.sin(Δλ/2);
-                var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            
-                return R * c; // в метрах
-            }
-            
-            // initialize Leaflet
-            var map = L.map('map', {
-                center: firstValue,
-                zoom: 15
-            });
-            
-            L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
-                attribution: '© <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(map);
-            
-            Object.entries(coordinates).forEach(([imageUrl, coord]) => {
-                var marker = L.marker(coord).addTo(map);
+        // Получаем первый элемент из объекта coordinates
+        var firstKey = Object.keys(coordinates)[0];
+        var firstValue = coordinates[firstKey];
+    
+        function getDistance(coord1, coord2) {
+                    var lat1 = coord1[0], lon1 = coord1[1];
+                    var lat2 = coord2[0], lon2 = coord2[1];
                 
-
-                // Вычислите расстояние до ближайшего маркера
-                var minDistance = Infinity;
-                var closestCoord;
-                Object.values(coordinates).forEach(c => {
-                    if (c !== coord) {
-                        var distance = getDistance(coord, c);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            closestCoord = c;
+                    var R = 6371e3; // радиус Земли в метрах
+                    var φ1 = lat1 * Math.PI/180; // φ, λ в радианах
+                    var φ2 = lat2 * Math.PI/180;
+                    var Δφ = (lat2-lat1) * Math.PI/180;
+                    var Δλ = (lon2-lon1) * Math.PI/180;
+                
+                    var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                            Math.cos(φ1) * Math.cos(φ2) *
+                            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                
+                    return R * c; // в метрах
+                }
+                
+                // initialize Leaflet
+                var map = L.map('map', {
+                    center: firstValue,
+                    zoom: 15
+                });
+                
+                L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+                }).addTo(map);
+                
+                Object.entries(coordinates).forEach(([imageUrl, coord]) => {
+                // Check if coordinates are numbers
+                if (!isNaN(coord[0]) && !isNaN(coord[1])) {
+                    var marker = L.marker(coord).addTo(map);
+    
+                    // Calculate the distance to the nearest marker
+                    var minDistance = Infinity;
+                    var closestCoord;
+                    Object.values(coordinates).forEach(c => {
+                        if (c !== coord && !isNaN(c[0]) && !isNaN(c[1])) {
+                            var distance = getDistance(coord, c);
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestCoord = c;
+                            }
                         }
-                    }
-                });
-                var tooltipContent = `<h7>${minDistance.toFixed(2)} м</h7>`;
-            
-                var tooltipOptions = {
-                    permanent: true, // подсказка всегда видна
-                    direction: "bottom", // подсказка будет справа от маркера
-                    offset: L.point(-15, 25) // смещение подсказки относительно маркера
-                };
-            
-                marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip(); // Открываем подсказку сразу
-                
-                marker.on('click', function(e) {
-                    // Добавьте информацию о расстоянии в всплывающее окно
-                    var popupContent = `<img src="${imageUrl}" alt="${coord[0]}, ${coord[1]}" width="300" height="400">
-                    <a href='${imageUrl}'>Ссылка на фотографию</a>`;
-                    var popup = L.popup().setContent(popupContent);
-            
-                    popup.setLatLng(e.latlng);
-                    popup.openOn(map);
-                });
-            
-                // Закройте всплывающее окно при нажатии в любом месте на карте
-                map.on('click', function() {
-                    map.closePopup();
-                });
+                    });
+                    var tooltipContent = `<h7>${minDistance.toFixed(2)} м</h7>`;
+    
+                    var tooltipOptions = {
+                        permanent: true, // tooltip is always visible
+                        direction: "bottom", // tooltip will be to the right of the marker
+                        offset: L.point(-15, 25) // offset of the tooltip relative to the marker
+                    };
+    
+                    marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip(); // Open the tooltip immediately
+    
+                    marker.on('click', function(e) {
+                        // Add distance information to the popup
+                        var popupContent = `<img src="${imageUrl}" alt="${coord[0]}, ${coord[1]}" width="300" height="400">
+                        <a href='${imageUrl}'>Ссылка на фотографию</a>`;
+                        var popup = L.popup().setContent(popupContent);
+    
+                        popup.setLatLng(e.latlng);
+                        popup.openOn(map);
+                    });
+    
+                    // Close the popup when clicking anywhere on the map
+                    map.on('click', function() {
+                        map.closePopup();
+                    });
+                }
             });
         </script>
     </body>
