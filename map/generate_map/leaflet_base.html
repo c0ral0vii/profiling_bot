@@ -1,67 +1,130 @@
 <!DOCTYPE HTML>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <style>
-      html, body {
-        height: 100%;
-        padding: 0;
-        margin: 0;
-      }
-      #map {
-        /* configure the size of the map */
-        width: 100%;
-        height: 100%;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="map"></div>
-    <script>
-    
-      // initialize Leaflet
-      var map = L.map('map', {
-        center: [51.82311, 55.167591],
-        zoom: 15
-      });
+    <html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+        <style>
+        html, body {
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        #map {
+            /* configure the size of the map */
+            width: 100%;
+            height: 100%;
+        }
+        .leaflet-tooltip {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <script>var coordinates = {'https://i.postimg.cc/R04xDnpK/7-EE7-F873-3-C50-4833-A30-F-B086-E64-BE694.jpg': ['83.113432', '83.113262'], 'https://i.postimg.cc/BZVsnbtf/B4-F81940-D1-AA-4-A58-A996-151906-C3-ABB3.jpg': ['83.115823', '54.754715', '83.115882'], 'https://i.postimg.cc/Sst0R1Sf/C02-BAC84-500-D-4-F1-B-A467-1286-B53-F61-CB.jpg': ['54.753543', '83.119843', '143.7616'], 'https://i.postimg.cc/Bvpf9QRy/E8-F64-AD1-D808-466-C-9812-FD243-FCFA80-E.jpg': ['83.120169', '54.75510', '83.120139', '139.66124'], 'https://i.postimg.cc/QN45NQpN/IMG-4803.jpg': ['54.753657', '83.118144'], 'https://i.postimg.cc/zvcRdNJH/IMG-4804.jpg': ['54.753340', '83.118457'], 'https://i.postimg.cc/7h62Mhyy/IMG-4805.jpg': ['54.753058', '83.120005'], 'https://i.postimg.cc/0QZSw-mFf/IMG-4806.jpg': ['54.753312', '83.119525'], 'https://i.postimg.cc/bvxkq4R4/IMG-4807.jpg': ['54.753405', '83.119071'], 'https://i.postimg.cc/63BRqzjq/IMG-4808.jpg': ['54.752911', '83.120590'], 'https://i.postimg.cc/qvC25N6J/IMG-4809.jpg': ['54.752732', '83.120418'], 'https://i.postimg.cc/QxCQc4XW/IMG-4810.jpg': ['54.752485', '83.120166'], 'https://i.postimg.cc/fTPxCcLq/IMG-4811.jpg': ['54.752312', '83.119963'], 'https://i.postimg.cc/QN0g9Gr3/IMG-4812.jpg': ['54.751982', '83.119506'], 'https://i.postimg.cc/hvyVHx0j/IMG-4813.jpg': ['54.751616', '83.118280'], 'https://i.postimg.cc/PJrm3KY9/IMG-4814.jpg': ['54.751927', '83.117756'], 'https://i.postimg.cc/Kz5PDCkt/IMG-4815.jpg': ['54.751845', '83.117478'], 'https://i.postimg.cc/1tS06yt9/IMG-4816.jpg': ['54.751885', '83.117086'], 'https://i.postimg.cc/8CMBj7TK/IMG-4817.jpg': ['54.752047', '83.116794'], 'https://i.postimg.cc/pLgJWfM5/IMG-4818.jpg': ['54.752415', '83.116203'], 'https://i.postimg.cc/CxZ4pvXV/IMG-4821.jpg': ['54.754095', '83.114339'], 'https://i.postimg.cc/sDHJ8Fnc/IMG-4823.jpg': ['54.755010', '83.115118'], 'https://i.postimg.cc/Wpn8Gqgx/IMG-4824.jpg': ['54.755270', '83.115388', '02.5618'], 'https://i.postimg.cc/MKpDdZYH/IMG-4825.jpg': ['54.755377', '83.115683'], 'https://i.postimg.cc/ZnVL4XJJ/IMG-4826.jpg': ['54.756060', '83.115497'], 'https://i.postimg.cc/mkbwxTfd/IMG-4827.jpg': ['54.755858', '83.115806'], 'https://i.postimg.cc/fL7KgJFt/IMG-4828.jpg': ['54.755941', '83.115944'], 'https://i.postimg.cc/k4PscxjP/IMG-4829.jpg': ['54.756150', '83.116084'], 'https://i.postimg.cc/g0Z48MHK/IMG-4830.jpg': ['54.756342', '83.116601'], 'https://i.postimg.cc/HkKBJGXx/IMG-4832.jpg': ['54.756293', '83.117492'], 'https://i.postimg.cc/wj3wTxtZ/IMG-4834.jpg': ['54.755891', '83.117834'], 'https://i.postimg.cc/65MHX4QC/IMG-4835.jpg': ['54.755499', '83.119475'], 'https://i.postimg.cc/br86zQb9/IMG-4837.jpg': ['54.755369', '83.119687'], 'https://i.postimg.cc/nrk3MCGb/IMG-4840.jpg': ['54.754507', '83.120684'], 'https://i.postimg.cc/66LjMmJj/IMG-4841.jpg': ['54.754627', '83.121014'], 'https://i.postimg.cc/PqpVKfTY/IMG-4842.jpg': ['54.754686', '83.121509'], 'https://i.postimg.cc/3xbbg053/IMG-4843.jpg': ['54.754620', '83.121784'], 'https://i.postimg.cc/zfstQmGM/IMG-4845.jpg': ['54.754168', '83.122358'], 'https://i.postimg.cc/tTFSQr1g/IMG-4846.jpg': ['54.754090', '83.121804'], 'https://i.postimg.cc/9QfnRtkx/IMG-4847.jpg': ['54.753863', '83.121619', '202413.3248'], 'https://i.postimg.cc/Qxmzdnf9/IMG-4848.jpg': ['54.753599', '83.121364'], 'https://i.postimg.cc/jqz9GjNh/IMG-4849.jpg': ['54.753473', '83.121205'], 'https://i.postimg.cc/HsdKHC91/IMG-4850.jpg': ['54.753369', '83.120884'], 'https://i.postimg.cc/brj5ZXXb/IMG-4851.jpg': ['54.753209', '83.120769', '202413.34713'], 'https://i.postimg.cc/8cB0WyDY/IMG-4852.jpg': ['54.753212', '83.120415'], 'https://i.postimg.cc/JnXg7rFM/IMG-4853.jpg': ['54.753253', '83.119950'], 'https://i.postimg.cc/tgwwHZ2B/IMG-4856.jpg': ['54.753815', '83.118302'], 'https://i.postimg.cc/q7zSYXXt/IMG-4857.jpg': ['54.754374', '83.116827'], 'https://i.postimg.cc/htCNp3xW/IMG-4858.jpg': ['54.754645', '83.116436'], 'https://i.postimg.cc/kgMkNd2v/IMG-4859.jpg': ['54.754664', '83.116197'], 'https://i.postimg.cc/rFNBtpwp/IMG-4862.jpg': ['54.756034', '83.111850'], 'https://i.postimg.cc/KjndfG7J/IMG-4863.jpg': ['54.756093', '83.111506'], 'https://i.postimg.cc/rs6B504D/IMG-4864.jpg': ['54.756210', '83.110969'], 'https://i.postimg.cc/BZH94pWH/IMG-4865.jpg': ['54.756341', '83.110850'], 'https://i.postimg.cc/5NJc0z1G/IMG-4866.jpg': ['54.756574', '83.110527'], 'https://i.postimg.cc/NMrhy7Kh/IMG-4867.jpg': ['54.757328', '83.111248'], 'https://i.postimg.cc/T3CvB3zs/IMG-4868.jpg': ['54.757715', '83.111459'], 'https://i.postimg.cc/9f0H2jVQ/IMG-4869.jpg': ['54.757768', '83.111890', '09281.4444'], 'https://i.postimg.cc/g07FkBkq/IMG-4870.jpg': ['54.756884', '83.114880'], 'https://i.postimg.cc/02GsdfcP/IMG-4871.jpg': ['54.756812', '83.115394'], 'https://i.postimg.cc/3xKHLvcp/IMG-4872.jpg': ['54.756584', '83.116037'], 'https://i.postimg.cc/9FH27SPL/IMG-4873.jpg': ['54.756361', '83.115956'], 'https://i.postimg.cc/DfXFmFGW/IMG-4874.jpg': ['54.756005', '83.115869'], 'https://i.postimg.cc/GtG1fJRP/IMG-4875.jpg': ['54.755945', '83.115465'], 'https://i.postimg.cc/85qSw-X2P/IMG-4876.jpg': ['54.754896', '83.114368', '13.5813'], 'https://i.postimg.cc/76C43rQW/IMG-4877.jpg': ['54.755118', '83.113878'], 'https://i.postimg.cc/MGpqGQ0x/IMG-4878.jpg': ['54.755251', '83.113482'], 'https://i.postimg.cc/fbqZSR5d/IMG-4879.jpg': ['54.755320', '83.113180'], 'https://i.postimg.cc/CxNwYNqm/IMG-4880.jpg': ['54.755458', '83.112673'], 'https://i.postimg.cc/t4y9LfYs/IMG-4881.jpg': ['54.756502', '83.110195'], 'https://i.postimg.cc/KvtZpFvX/IMG-4882.jpg': ['54.755836', '83.109476'], 'https://i.postimg.cc/dQbs9DFm/IMG-4883.jpg': ['54.754291', '83.109756'], 'https://i.postimg.cc/h4z4xTkt/IMG-4884.jpg': ['54.754188', '83.110074'], 'https://i.postimg.cc/kD3pRkkK/IMG-4885.jpg': ['54.753851', '83.111142'], 'https://i.postimg.cc/90qkMWNc/IMG-4886.jpg': ['54.753799', '83.111352'], 'https://i.postimg.cc/pTS7R9C0/IMG-4887.jpg': ['54.753766', '83.111556'], 'https://i.postimg.cc/SKD311Mb/IMG-4888.jpg': ['54.753368', '83.112378'], 'https://i.postimg.cc/fLyFG7ct/IMG-4889.jpg': ['54.753381', '83.112754'], 'https://i.postimg.cc/k5nLcPDy/IMG-4890.jpg': ['54.753915', '83.113071'], 'https://i.postimg.cc/ncm8V16q/IMG-4891.jpg': ['54.753817', '83.113301'], 'https://i.postimg.cc/x8kwzGqD/IMG-4892.jpg': ['54.753537', '83.113154'], 'https://i.postimg.cc/G3Vw1fSc/IMG-4893.jpg': ['54.753808', '83.113627'], 'https://i.postimg.cc/Gm0CvfkM/IMG-4894.jpg': ['54.754400', '83.113880'], 'https://i.postimg.cc/dV8K696J/IMG-4895.jpg': ['54.754699', '83.114116']};
+        // Получаем первый элемент из объекта coordinates
+        var firstKey = Object.keys(coordinates)[0];
+var firstValue = coordinates[firstKey];
 
-      L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(map);
+function getDistance(coord1, coord2) {
+    var lat1 = coord1[0], lon1 = coord1[1];
+    var lat2 = coord2[0], lon2 = coord2[1];
 
-      // Fetch coordinates from the file
+    var R = 6371e3; // радиус Земли в метрах
+    var φ1 = lat1 * Math.PI/180; // φ, λ в радианах
+    var φ2 = lat2 * Math.PI/180;
+    var Δφ = (lat2-lat1) * Math.PI/180;
+    var Δλ = (lon2-lon1) * Math.PI/180;
 
-        var markers = coordinates.map(coord => {
-            var marker = L.marker(coord).addTo(map);
-            var circle = L.circle(coord, {
-                color: 'blue',
-                fillColor: '#f03',
-                fillOpacity: 0.3,
-                radius: 10
-            }).addTo(map);
+    var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-            // Создайте всплывающее окно с изображением
-            var imageUrl = `temp/imgs/${coord[0]},${coord[1]}.jpg`;
-            var popupContent = `<img src="${imageUrl}" alt="${coord[0]}, ${coord[1]}" width="300" height="400">`;
-            var popup = L.popup().setContent(popupContent);
+    return R * c; // в метрах
+}
 
-            // Откройте всплывающее окно при нажатии на маркер
-            marker.on('click', function(e) {
-                popup.setLatLng(e.latlng);
-                popup.openOn(map);
-            });
+// initialize Leaflet
+var map = L.map('map', {
+    center: firstValue,
+    zoom: 15
+});
 
-            // Закройте всплывающее окно при нажатии в любом месте на карте
-            map.on('click', function() {
-                map.closePopup();
-            });
+L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',{
+  maxZoom: 20,
+  subdomains:['mt0','mt1','mt2','mt3']
+}).addTo(map);
 
-            return marker;
+var markerCount = 0; // Initialize marker counter
+
+Object.entries(coordinates).forEach(([imageUrl, coord]) => {
+    // Check if coordinates are numbers
+    if (!isNaN(coord[0]) && !isNaN(coord[1])) {
+        var marker = L.marker([coord[0], coord[1]]).addTo(map); // Use only the first two coordinates
+        markerCount++; // Increment marker counter
+
+        // Calculate the distance to the nearest marker
+        var minDistance = Infinity;
+        var closestCoord;
+        Object.values(coordinates).forEach(c => {
+            if (c !== coord && !isNaN(c[0]) && !isNaN(c[1])) {
+                var distance = getDistance([coord[0], coord[1]], [c[0], c[1]]); // Use only the first two coordinates
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestCoord = c;
+                }
+            }
         });
 
-    </script>
-  </body>
-</html>
+        var tooltipContent = `<h7 style="color: yellow; font-size: 15px">${minDistance.toFixed(2)} м</h7>`;
+
+        var tooltipOptions = {
+            permanent: true, // tooltip is always visible
+            direction: "bottom", // tooltip will be to the right of the marker
+            offset: L.point(-15, 25) // offset of the tooltip relative to the marker
+        };
+
+        marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip(); // Open the tooltip immediately
+
+        marker.on('click', function(e) {
+            // Add distance information to the popup
+            var popupContent = `<img src="${imageUrl}" alt="${coord[0]}, ${coord[1]}" width="300" height="400">
+            <a href='${imageUrl}'>Ссылка на фотографию</a>`;
+            var popup = L.popup().setContent(popupContent);
+
+            popup.setLatLng(e.latlng);
+            popup.openOn(map);
+        });
+
+        // Close the popup when clicking anywhere on the map
+        map.on('click', function() {
+            map.closePopup();
+        });
+    } else {
+        console.log(`Skipped invalid coordinates for image ${imageUrl}`);
+    }
+});
+
+// Display total number of markers on the map
+var info = L.control();
+
+info.onAdd = function (map) {
+    this._div = L.DomUtil.create('div', 'info'); // create a div with a class "info"
+    this.update();
+    return this._div;
+};
+
+// method that we will use to update the control based on feature properties passed
+info.update = function () {
+    this._div.innerHTML = '<h4 style="color: yellowgreen; font-size: 15px">Число маркеров на карте:  ' + markerCount + '</h4>';
+};
+
+info.addTo(map);
+
+        </script>
+    </body>
+    </html>

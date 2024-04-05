@@ -84,7 +84,7 @@ var markerCount = 0; // Initialize marker counter
 Object.entries(coordinates).forEach(([imageUrl, coord]) => {
     // Check if coordinates are numbers
     if (!isNaN(coord[0]) && !isNaN(coord[1])) {
-        var marker = L.marker(coord).addTo(map);
+        var marker = L.marker([coord[0], coord[1]]).addTo(map); // Use only the first two coordinates
         markerCount++; // Increment marker counter
 
         // Calculate the distance to the nearest marker
@@ -92,13 +92,14 @@ Object.entries(coordinates).forEach(([imageUrl, coord]) => {
         var closestCoord;
         Object.values(coordinates).forEach(c => {
             if (c !== coord && !isNaN(c[0]) && !isNaN(c[1])) {
-                var distance = getDistance(coord, c);
+                var distance = getDistance([coord[0], coord[1]], [c[0], c[1]]); // Use only the first two coordinates
                 if (distance < minDistance) {
                     minDistance = distance;
                     closestCoord = c;
                 }
             }
         });
+
         var tooltipContent = `<h7 style="color: yellow; font-size: 15px">${minDistance.toFixed(2)} м</h7>`;
 
         var tooltipOptions = {
@@ -126,23 +127,24 @@ Object.entries(coordinates).forEach(([imageUrl, coord]) => {
     } else {
         console.log(`Skipped invalid coordinates for image ${imageUrl}`);
     }
-        });
-        
-        // Display total number of markers on the map
-        var info = L.control();
-        
-        info.onAdd = function (map) {
-            this._div = L.DomUtil.create('div', 'info'); // create a div with a class "info"
-            this.update();
-            return this._div;
-        };
-        
-        // method that we will use to update the control based on feature properties passed
-        info.update = function () {
-            this._div.innerHTML = '<h4 style="color: yellowgreen; font-size: 15px">Число маркеров на карте:  ' + markerCount + '</h4>';
-        };
-        
-        info.addTo(map);
+});
+
+// Display total number of markers on the map
+var info = L.control();
+
+info.onAdd = function (map) {
+    this._div = L.DomUtil.create('div', 'info'); // create a div with a class "info"
+    this.update();
+    return this._div;
+};
+
+// method that we will use to update the control based on feature properties passed
+info.update = function () {
+    this._div.innerHTML = '<h4 style="color: yellowgreen; font-size: 15px">Число маркеров на карте:  ' + markerCount + '</h4>';
+};
+
+info.addTo(map);
+
         </script>
     </body>
     </html>'''
