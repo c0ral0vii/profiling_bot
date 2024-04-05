@@ -16,8 +16,6 @@ dp = Dispatcher()
 async def start(message: Message):
     '''Стартовое сообщение'''
 
-    print(message.from_user.id)
-    print(create_new_user(user=message.from_user.id))
     await message.reply('Отправь мне ссылку на файлообменник')
 
 
@@ -31,8 +29,8 @@ async def get_filesharing(message: Message):
 
     if result:
         await message.reply(f'Идёт обработка, подождите....')
-        await check_filesharing(text=message.text, user=user_id)
-        await message.reply_document(FSInputFile(path=f'map/generate_map/{str(user_id)}/leaflet.html'), caption="Готово")
+        count = await check_filesharing(text=message.text, user=user_id)
+        await message.reply_document(FSInputFile(path=f'map/generate_map/{str(user_id)}/leaflet.html'), caption=f"Готово, {count}")
     else:
         await message.reply(f'В сообщени нет ссылки поддерживаемой нашим ботом')
 

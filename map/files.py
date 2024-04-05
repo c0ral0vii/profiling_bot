@@ -1,7 +1,7 @@
 import os
 
 
-def create_new_user(user: str):
+def create_new_user(user: int):
     '''Создание папки для пользователя'''
 
     try:

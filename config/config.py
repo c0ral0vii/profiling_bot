@@ -7,10 +7,11 @@ load_dotenv()
 
 
 # Допустимые файлообменники
-filesharings = ['postimg', 'files']
+filesharings = ['postimg']
 
 # Генерация имён у фотографий
-filename = 'image_' + str(uuid.uuid4()) + '.jpg'
+filename = ('imlist'
+            'age_') + str(uuid.uuid4()) + '.jpg'
 
 # Путь к фотографиям
 def generate_path(user):
