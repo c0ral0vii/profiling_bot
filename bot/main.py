@@ -16,6 +16,7 @@ dp = Dispatcher()
 async def start(message: Message):
     '''Стартовое сообщение'''
 
+    user = create_new_user(user=message.from_user.id)
     await message.reply('Отправь мне ссылку на файлообменник')
 
 
