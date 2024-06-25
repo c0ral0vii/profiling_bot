@@ -1,20 +1,7 @@
-from ocr.main import check_img
-from .parsing import get_imgs
+import aiofiles
 
 
-async def check_filesharing(text: str, user: int):
-    '''Проверка является ли текст файлообменником'''
-
-    img_urls = await get_imgs(url=text, user=user)
-
-    result = check_img(img_urls=img_urls)
-
-    create_html(coords=result[0], user=user)
-
-    return result[1]
-
-
-def create_html(coords: dict, user: int):
+async def create_html(coords: dict, user: int):
     coords = {url: coord for url, coord in coords.items() if len(coord) >= 2}
 
     html_one = '''<!DOCTYPE HTML>
@@ -152,5 +139,5 @@ info.addTo(map);
     options = f'var coordinates = {coords};'
     gen_map = f'map/generate_map/{user}/leaflet.html'
 
-    with open(gen_map, 'w', encoding='utf-8') as file:
-        file.write(html_one + options + html_two)
+    async with aiofiles.open(gen_map, 'w', encoding='utf-8') as file:
+        await file.write(html_one + options + html_two)

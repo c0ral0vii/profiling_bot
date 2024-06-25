@@ -1,8 +1,10 @@
+import aiofiles
 import aiohttp
 import time
 
 from bs4 import BeautifulSoup
 from .download import get_source_html
+
 
 async def get_page(url: str):
     '''Получение страницы'''
@@ -20,13 +22,11 @@ async def get_page(url: str):
 
 async def get_imgs(url: str, user: int):
     '''Получение фотографий с файлообменника'''
-    
-    
 
     try:
-        with open(get_source_html(url=url, user=user), 'r', encoding='utf-8') as f:
-            soup = BeautifulSoup(f.read(), 'lxml')
-        
+        async with aiofiles.open(await get_source_html(url=url, user=user), 'r', encoding='utf-8') as f:
+            soup = BeautifulSoup(await f.read(), 'lxml')
+
     except Exception as ex:
         print(f'Ошибка: {ex}')
         return
@@ -35,6 +35,7 @@ async def get_imgs(url: str, user: int):
 
     # postimg
     img_links = soup.find_all('a', class_='img')
+
     for text in img_links:
         if text.get('href')[0] != 'h':
             correct_url = 'https:' + text.get('href')
