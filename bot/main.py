@@ -11,7 +11,7 @@ from map.files import create_new_user
 from ocr.main import check_img
 from map.parsing import get_imgs
 from map.main import create_html
-from map.main import check_filesharing
+
 
 dp = Dispatcher()
 
@@ -37,11 +37,12 @@ async def get_filesharing(message: Message):
     else:
         await message.reply(f'В сообщени нет ссылки поддерживаемой нашим ботом')
 
+
 async def check_function(message: Message):
     '''Проверка и отправка состояний'''
 
     user_id = message.from_user.id
-    chat_id = message.chat.id
+
     await message.reply('Получаем изображения с файлообменника...')
     img_urls = await get_imgs(url=message.text, user=user_id)
     await message.reply(' ✅Изображения получены, получаем координаты...')
@@ -49,12 +50,6 @@ async def check_function(message: Message):
     await message.reply(' ✅Координаты получены, создаём карту...')
     await create_html(coords=result[0], user=user_id)
     await message.reply_document(FSInputFile(path=f'map/generate_map/{str(user_id)}/leaflet.html'), caption=f"Готово ✅, {result[-1]}")
-
-@dp.message(F.text == '/stop')
-async def restart_bot(message: Message):
-    '''Restart bot'''
-
-    await message.answer('Проверка карты остановлена')
 
 
 async def run_bot():

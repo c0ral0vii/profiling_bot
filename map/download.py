@@ -5,9 +5,11 @@ from selenium import webdriver
 
 
 async def get_source_html(url: str, user: int):
-    driver = webdriver.Chrome()
-    options = webdriver.ChromeOptions()
+    driver = webdriver.Firefox()
+    options = webdriver.FirefoxOptions()
     options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--incognito')
+    options.add_argument('--headless')
 
     try:
         driver.get(url=url)
