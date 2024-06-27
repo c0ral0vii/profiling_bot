@@ -39,17 +39,20 @@ async def get_filesharing(message: Message):
 
 
 async def check_function(message: Message):
-    '''Проверка и отправка состояний'''
-
     user_id = message.from_user.id
+    msg = await message.reply('Получаем изображения с файлообменника...')
 
-    await message.reply('Получаем изображения с файлообменника...')
     img_urls = await get_imgs(url=message.text, user=user_id)
-    await message.reply(' ✅Изображения получены, получаем координаты...')
+    await msg.edit_text(' ✅Изображения получены, получаем координаты...')
+
     result = await check_img(img_urls=img_urls)
-    await message.reply(' ✅Координаты получены, создаём карту...')
+    await msg.edit_text(' ✅Координаты получены, создаём карту...')
+
     await create_html(coords=result[0], user=user_id)
-    await message.reply_document(FSInputFile(path=f'map/generate_map/{str(user_id)}/leaflet.html'), caption=f"Готово ✅, {result[-1]}")
+    await msg.delete()
+
+    await message.reply_document(FSInputFile(path=f'map/generate_map/{str(user_id)}/leaflet.html'),
+                                 caption=f"Готово ✅, {result[-1]}")
 
 
 async def run_bot():

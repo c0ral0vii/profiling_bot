@@ -17,6 +17,7 @@ ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
 pool_instance = None
+reader = Reader(['en'], gpu=False)
 
 
 def process_img(img_urls: str, reader) -> dict:
@@ -64,10 +65,10 @@ def process_img(img_urls: str, reader) -> dict:
 async def check_img(img_urls: list) -> dict:
     '''EasyOCR смотрит фотографию и ищет координаты на нём'''
 
-    reader = Reader(['en'], gpu=False)
 
-    with Pool(processes=3) as pool:
-        results = pool.map(process_img, img_urls, reader)
+    with Pool(processes=2) as pool:
+
+        results = pool.map(process_img(img_urls=img_urls, reader=reader))
 
     coordinates = {k: v for result in results for k, v in result.items()}
 
