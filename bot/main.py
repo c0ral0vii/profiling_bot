@@ -8,7 +8,7 @@ from aiogram.filters import CommandStart
 
 from config.config import BOT_API_TOKEN, filesharings
 from map.files import create_new_user
-from ocr.main import check_img
+from ocr.main import check_img, stop
 from map.parsing import get_imgs
 from map.main import create_html
 
@@ -21,7 +21,8 @@ async def start(message: Message):
     '''Стартовое сообщение'''
 
     user = create_new_user(user=message.from_user.id)
-    await message.reply('Отправь мне ссылку на файлообменник')
+    stop_answer = await stop()
+    await message.reply(f'Отправь мне ссылку на файлообменник, {stop_answer}')
 
 
 @dp.message()

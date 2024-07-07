@@ -1,14 +1,13 @@
-import numpy as np
-import re
-import urllib.request
 import ssl
-import datetime
 import asyncio
-
-from io import BytesIO
-from easyocr import Reader
-from multiprocessing.dummy import Pool
+import aiohttp
 from PIL import Image
+import numpy as np
+from io import BytesIO
+import re
+
+from easyocr import Reader
+
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -20,56 +19,73 @@ pool_instance = None
 reader = Reader(['en'], gpu=False)
 
 
-def process_img(img_urls: str, reader) -> dict:
-    '''Обработка фотографии'''
+async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphore):
+    async with semaphore:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(img_link, ssl=ctx) as response:
+                if response.status == 200:
+                    img_data = await response.read()
+                else:
+                    return f'Ошибка - {img_link}'
 
-    current_time = datetime.datetime.today()
+        img = Image.open(BytesIO(img_data))
+        img = img.convert('L')
+        img = np.array(img)
 
-    with urllib.request.urlopen(img_urls, context=ctx) as u:
-        raw_data = u.read()
+        result = reader.readtext(img)
 
-    img = Image.open(BytesIO(raw_data))
-    img = img.convert('L')
-    img = np.array(img)
+        two_cords = []
+        coordinates = {}
 
-    result = reader.readtext(img)
+        for line in result:
+            word = line[1]
+            coord = re.findall(r'([1-9]\d[.,]\d{4,6})', word)
 
-    two_cords = []
-    coordinates = {}
+            if len(coord) == 2:
+                coord[0] = coord[0].replace(',', '.')
+                coord[-1] = coord[-1].replace(',', '.')
 
-    for line in result:
-        word = line[1]
-        coord = re.findall(r'([1-9]\d[.,]\d{4,6})', word)
-        print(word, coord)
-        if len(coord) == 2:
-            coord[0] = coord[0].replace(',', '.')
-            coord[-1] = coord[-1].replace(',', '.')
+                coordinates[img_link] = coord
+                continue
 
-            coordinates[img_urls] = coord
-            continue
+            if len(coord) == 1:
+                two_cords.append(coord)
+                continue
 
-        if len(coord) == 1:
-            two_cords.append(coord)
-            continue
+        for _ in two_cords:
+            ready_coords = []
+            for cord in two_cords:
+                ready_coords.append(*cord)
+            coordinates.setdefault(img_link, ready_coords)
 
-    for _ in two_cords:
-        ready_coords = []
-        for cord in two_cords:
-            ready_coords.append(*cord)
-        coordinates.setdefault(img_urls, ready_coords)
+        return coordinates
 
-    print(coordinates)
-    return coordinates
-
+task_list = []
 
 async def check_img(img_urls: list) -> dict:
     '''EasyOCR смотрит фотографию и ищет координаты на нём'''
 
+    semaphore = asyncio.Semaphore(2)
+    tasks = [asyncio.create_task(process_img(img_link, reader, semaphore)) for img_link in img_urls]
 
-    with Pool(processes=2) as pool:
+    for task in tasks:
+        task_list.append(task)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        results = pool.map(process_img(img_urls=img_urls, reader=reader))
-
-    coordinates = {k: v for result in results for k, v in result.items()}
+    coordinates = {}
+    for result in results:
+        if isinstance(result, Exception):
+            print(f"Ошибка: {result}")
+        else:
+            coordinates.update(result)
 
     return [coordinates, f'{len(coordinates)}/{len(img_urls)}']
+
+async def stop():
+    '''Остановка обработки фотографий'''
+    if len(task_list) > 0:
+        for task in task_list:
+            task.cancel()
+        return 'Остановлено'
+    else:
+        return 'Никаких задач сейчас нет'
