@@ -1,9 +1,10 @@
-FROM python:3.10
+FROM python:3.12-slim
 
-WORKDIR /app
+RUN python3 -m venv venv
 
-COPY . .
+COPY requirements.txt ./
+RUN pip install -r ./requirements.txt
 
-RUN pip install -r requirements.txt
+COPY . ./
 
 CMD ["python", "run.py"]
