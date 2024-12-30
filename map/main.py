@@ -5,20 +5,20 @@ async def create_html(coords: dict, user: int):
     coords = {url: coord for url, coord in coords.items() if len(coord) >= 2}
 
     html_one = '''<!DOCTYPE HTML>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-        <style>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <style>
         html, body {
             height: 100%;
             padding: 0;
             margin: 0;
         }
         #map {
-            /* configure the size of the map */
             width: 100%;
             height: 100%;
         }
@@ -27,114 +27,147 @@ async def create_html(coords: dict, user: int):
             border: none;
             box-shadow: none;
         }
-        </style>
-    </head>
-    <body>
-        <div id="map"></div>
-        <script>'''
+        .leaflet-popup-content-wrapper {
+        width: 120%;
+        }
+
+        .leaflet-popup-content-wrapper .popup-images div {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>'''
     html_two = r'''
-        // Получаем первый элемент из объекта coordinates
-        var firstKey = Object.keys(coordinates)[0];
-var firstValue = coordinates[firstKey];
+        const markerGroups = [];
 
-function getDistance(coord1, coord2) {
-    var lat1 = coord1[0], lon1 = coord1[1];
-    var lat2 = coord2[0], lon2 = coord2[1];
+        // Проверяем, существует ли группа маркеров, где расстояние <= 100 метров
+        function findGroup(coord, threshold = 0) {
+            const point = turf.point([coord.lon, coord.lat]);
 
-    var R = 6371e3; // радиус Земли в метрах
-    var φ1 = lat1 * Math.PI/180; // φ, λ в радианах
-    var φ2 = lat2 * Math.PI/180;
-    var Δφ = (lat2-lat1) * Math.PI/180;
-    var Δλ = (lon2-lon1) * Math.PI/180;
+            for (const group of markerGroups) {
+                const groupPoint = turf.point([group.lon, group.lat]);
+                const distance = turf.distance(point, groupPoint, { units: 'meters' });
 
-    var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-    return R * c; // в метрах
-}
-
-// initialize Leaflet
-var map = L.map('map', {
-    center: firstValue,
-    zoom: 15
-});
-
-L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}',{
-  maxZoom: 20,
-  subdomains:['mt0','mt1','mt2','mt3']
-}).addTo(map);
-
-var markerCount = 0; // Initialize marker counter
-
-Object.entries(coordinates).forEach(([imageUrl, coord]) => {
-    // Check if coordinates are numbers
-    if (!isNaN(coord[0]) && !isNaN(coord[1])) {
-        var marker = L.marker([coord[0], coord[1]]).addTo(map); // Use only the first two coordinates
-        markerCount++; // Increment marker counter
-
-        // Calculate the distance to the nearest marker
-        var minDistance = Infinity;
-        var closestCoord;
-        Object.values(coordinates).forEach(c => {
-            if (c !== coord && !isNaN(c[0]) && !isNaN(c[1])) {
-                var distance = getDistance([coord[0], coord[1]], [c[0], c[1]]); // Use only the first two coordinates
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestCoord = c;
+                if (distance <= threshold) {
+                    return group;
                 }
+            }
+            return null;
+        }
+
+        // Обработка координат
+        Object.entries(coordinates).forEach(([imageUrl, coord]) => {
+            const [lat, lon] = coord.slice(0, 2).map(c => parseFloat(c.replace(',', '.')));
+            if (isNaN(lat) || isNaN(lon)) return;
+
+            const existingGroup = findGroup({ lat, lon });
+
+            if (existingGroup) {
+                // Добавляем фото в правильную группу
+                existingGroup.images.push(imageUrl);
+                existingGroup.duplicates += 1;
+            } else {
+                // Создаем новую группу
+                markerGroups.push({
+                    lat,
+                    lon,
+                    images: [imageUrl],
+                    duplicates: 1
+                });
             }
         });
 
-        var tooltipContent = `<h7 style="color: yellow; font-size: 15px">${minDistance.toFixed(2)} м</h7>`;
+        // Инициализация карты
+        const map = L.map('map', {
+            center: markerGroups.length > 0 
+                ? [markerGroups[0].lat, markerGroups[0].lon] 
+                : [55.5803, 37.6657],
+            zoom: 15
+        });
 
-        var tooltipOptions = {
-            permanent: true, // tooltip is always visible
-            direction: "bottom", // tooltip will be to the right of the marker
-            offset: L.point(-15, 25) // offset of the tooltip relative to the marker
+        L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 22,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        }).addTo(map);
+
+        let markerCount = 0;
+        let duplicateCount = 0;
+
+        // Добавление маркеров на карту
+        markerGroups.forEach((group) => {
+            const { lat, lon, images, duplicates } = group;
+
+            const marker = L.marker([lat, lon]).addTo(map);
+            markerCount++;
+            duplicateCount += duplicates - 1; // Учитываем только дополнительные дубли
+
+            // Найти ближайший маркер
+            let minDistance = Infinity;
+
+            markerGroups.forEach((otherGroup) => {
+                if (group !== otherGroup) {
+                    const from = turf.point([lon, lat]);
+                    const to = turf.point([otherGroup.lon, otherGroup.lat]);
+                    const distance = turf.distance(from, to, { units: 'meters' });
+
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                    }
+                }
+            });
+
+            // Создаем контент для всех фото в группе
+            const popupContent = `
+            <h5>Фотографий в группе: ${images.length}</h5>
+            <div class="popup-images" style="display: flex">
+                ${images.map(imageUrl => `
+                    <div style="margin: 5px;">
+                        <img src="${imageUrl}" alt="Image" width="140" height="180">
+                        <a href="${imageUrl}">Ссылка на фотографию</a>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+            var tooltipContent = `
+                <h7 style="color: yellow; font-size: 15px">${minDistance.toFixed(2)} м</h7>
+            `;
+            if (duplicates > 1) {
+    tooltipContent += `
+        <h7 style="color: red; font-size: 13px">Дубли: ${duplicates}</h7>
+    `;
+}
+            
+            const tooltipOptions = {
+                permanent: true,
+                direction: "bottom",
+                offset: L.point(-15, 25)
+            };
+
+            marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip();
+            marker.bindPopup(popupContent);
+        });
+
+        // Показать количество маркеров
+        const info = L.control();
+        info.onAdd = function () {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
         };
-
-        marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip(); // Open the tooltip immediately
-
-        marker.on('click', function(e) {
-            // Add distance information to the popup
-            var popupContent = `<img src="${imageUrl}" alt="${coord[0]}, ${coord[1]}" width="300" height="400">
-            <a href='${imageUrl}'>Ссылка на фотографию</a>`;
-            var popup = L.popup().setContent(popupContent);
-
-            popup.setLatLng(e.latlng);
-            popup.openOn(map);
-        });
-
-        // Close the popup when clicking anywhere on the map
-        map.on('click', function() {
-            map.closePopup();
-        });
-    } else {
-        console.log(`Skipped invalid coordinates for image ${imageUrl}`);
-    }
-});
-
-// Display total number of markers on the map
-var info = L.control();
-
-info.onAdd = function (map) {
-    this._div = L.DomUtil.create('div', 'info'); // create a div with a class "info"
-    this.update();
-    return this._div;
-};
-
-// method that we will use to update the control based on feature properties passed
-info.update = function () {
-    this._div.innerHTML = '<h4 style="color: yellowgreen; font-size: 15px">Число маркеров на карте:  ' + markerCount + '</h4>';
-};
-
-info.addTo(map);
-
-        </script>
-    </body>
-    </html>'''
+        info.update = function () {
+            this._div.innerHTML = `
+                <h4 style="color: yellowgreen; font-size: 15px">
+                    Число маркеров на карте: ${markerCount} (${duplicateCount} дублей)
+                </h4>
+            `;
+        };
+        info.addTo(map);
+    </script>
+</body>
+</html>'''
 
     options = f'var coordinates = {coords};'
     gen_map = f'map/generate_map/{user}/leaflet.html'
