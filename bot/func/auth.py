@@ -4,7 +4,6 @@ from config.config import PASSWORD
 
 async def check_password(password: str, user: int) -> str:
     if PASSWORD == password:
-        auth_user(user=user)
         return True
     return False
 

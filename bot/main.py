@@ -23,12 +23,7 @@ dp = Dispatcher()
 async def start(message: Message, state: FSMContext):
     '''Стартовое сообщение'''
 
-    user = create_new_user(user=message.from_user.id)
-    if not await check_auth(user=message.from_user.id):
-        await message.answer('Введите пароль:')
-        await state.set_state(AuthUser.password)
-    else:
-        await message.answer('Ты авторизован, можешь пользоваться ботом..')
+    await message.answer('Введите пароль:')
 
 
 @dp.message(F.text, AuthUser.password)
@@ -37,7 +32,7 @@ async def login(message: Message, state: FSMContext):
     Вход
     '''
 
-    if check_password(user=message.from_user.id, password=message.text):
+    if await check_password(user=message.from_user.id, password=message.text):
         await state.clear()
 
         await message.answer(f'Вы ввели правильный пароль, можете пользоваться ботом..')
@@ -51,7 +46,7 @@ async def login(message: Message, state: FSMContext):
 async def help(message: Message, state: FSMContext):
     '''Помощь'''
 
-    await message.reply(f'')
+    await message.reply(f'Авторизуйте, далее вы можете пользоваться ботом. Далее отправьте ссылку.')
 
 
 @dp.message(Command('stop'), Auth.auth)
