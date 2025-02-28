@@ -21,85 +21,87 @@ dp = Dispatcher()
 
 @dp.message(CommandStart(), StateFilter(None))
 async def start(message: Message, state: FSMContext):
-    '''Стартовое сообщение'''
+    """Стартовое сообщение"""
 
-    await message.answer('Введите пароль:')
+    await message.answer("Введите пароль:")
 
 
 @dp.message(F.text, AuthUser.password)
 async def login(message: Message, state: FSMContext):
-    '''
+    """
     Вход
-    '''
+    """
 
     if await check_password(user=message.from_user.id, password=message.text):
         await state.clear()
 
-        await message.answer(f'Вы ввели правильный пароль, можете пользоваться ботом..')
+        await message.answer(f"Вы ввели правильный пароль, можете пользоваться ботом..")
         await state.set_state(Auth.auth)
     else:
         await state.set_state(AuthUser.password)
-        await message.answer('Вы ввели неправильный пароль!')
+        await message.answer("Вы ввели неправильный пароль!")
 
 
-@dp.message(Command('help'), Auth.auth)
+@dp.message(Command("help"), Auth.auth)
 async def help(message: Message, state: FSMContext):
-    '''Помощь'''
+    """Помощь"""
 
-    await message.reply(f'Авторизуйте, далее вы можете пользоваться ботом. Далее отправьте ссылку.')
+    await message.reply(
+        f"Авторизуйте, далее вы можете пользоваться ботом. Далее отправьте ссылку."
+    )
 
 
-@dp.message(Command('stop'), Auth.auth)
+@dp.message(Command("stop"), Auth.auth)
 async def stop_func(message: Message, state: FSMContext):
-    '''Стоп функция'''
+    """Стоп функция"""
 
     try:
         result = await stop()
         await message.answer(result)
     except Exception as e:
-        await message.answer(f'Ошибка - {e}')
+        await message.answer(f"Ошибка - {e}")
 
 
 @dp.message(Auth.auth)
 async def get_filesharing(message: Message, state: FSMContext):
-    '''Проверка на файлообменник'''
+    """Проверка на файлообменник"""
 
     user_id = message.from_user.id
-    regular = r'\b(?:{})\b'.format('|'.join(filesharings))
+    regular = r"\b(?:{})\b".format("|".join(filesharings))
     result = re.search(regular, message.text)
 
     if result:
         await check_function(message=message)
     else:
-        await message.reply(f'В сообщени нет ссылки поддерживаемой нашим ботом')
+        await message.reply(f"В сообщени нет ссылки поддерживаемой нашим ботом")
 
 
 async def check_function(message: Message):
     try:
         user_id = message.from_user.id
-        msg = await message.reply('Получаем изображения с файлообменника...')
+        msg = await message.reply("Получаем изображения с файлообменника...")
 
         img_urls = await get_imgs(url=message.text, user=user_id)
-        await msg.edit_text(' ✅Изображения получены, получаем координаты...')
+        await msg.edit_text(" ✅Изображения получены, получаем координаты...")
 
         result = await check_img(img_urls=img_urls)
-        await msg.edit_text(' ✅Координаты получены, создаём карту...')
+        await msg.edit_text(" ✅Координаты получены, создаём карту...")
 
         await create_html(coords=result[0], user=user_id)
         await msg.delete()
 
-        await message.reply_document(FSInputFile(path=f'map/generate_map/{str(user_id)}/leaflet.html'),
-                                    caption=f"Готово ✅, {result[-1]}")
+        await message.reply_document(
+            FSInputFile(path=f"map/generate_map/{str(user_id)}/leaflet.html"),
+            caption=f"Готово ✅, {result[-1]}",
+        )
     except Exception as e:
         await msg.delete()
-        await message.answer(f'Произошла ошибка при обработке, повторите попытку({e})')
+        await message.answer(f"Произошла ошибка при обработке, повторите попытку({e})")
 
 
 async def run_bot():
-    '''Запуск бота'''
+    """Запуск бота"""
 
     bot = Bot(BOT_API_TOKEN)
 
     await dp.start_polling(bot)
-
-

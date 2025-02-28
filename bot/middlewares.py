@@ -9,5 +9,5 @@ class ValidAccounts(BaseMiddleware):
 
     async def on_pre_process_message(self):
         if self.message.from_user.id not in self.allowed_users:
-            await self.message.answer(f'У вас нет доступа для использования бота')
+            await self.message.answer(f"У вас нет доступа для использования бота")
             return

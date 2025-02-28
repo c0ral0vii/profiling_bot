@@ -16,7 +16,7 @@ ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
 pool_instance = None
-reader = Reader(['en'], gpu=False)
+reader = Reader(["en"], gpu=False)
 
 
 async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphore):
@@ -26,10 +26,10 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
                 if response.status == 200:
                     img_data = await response.read()
                 else:
-                    return f'Ошибка - {img_link}'
+                    return f"Ошибка - {img_link}"
 
         img = Image.open(BytesIO(img_data))
-        img = img.convert('L')
+        img = img.convert("L")
         img = np.array(img)
 
         result = reader.readtext(img)
@@ -39,11 +39,11 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
 
         for line in result:
             word = line[1]
-            coord = re.findall(r'([1-9]\d[.,]\d{4,6})', word)
+            coord = re.findall(r"([1-9]\d[.,]\d{4,6})", word)
 
             if len(coord) == 2:
-                coord[0] = coord[0].replace(',', '.')
-                coord[-1] = coord[-1].replace(',', '.')
+                coord[0] = coord[0].replace(",", ".")
+                coord[-1] = coord[-1].replace(",", ".")
 
                 coordinates[img_link] = coord
                 continue
@@ -60,13 +60,18 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
 
         return coordinates
 
+
 task_list = []
 
+
 async def check_img(img_urls: list) -> dict:
-    '''EasyOCR смотрит фотографию и ищет координаты на нём'''
+    """EasyOCR смотрит фотографию и ищет координаты на нём"""
 
     semaphore = asyncio.Semaphore(2)
-    tasks = [asyncio.create_task(process_img(img_link, reader, semaphore)) for img_link in img_urls]
+    tasks = [
+        asyncio.create_task(process_img(img_link, reader, semaphore))
+        for img_link in img_urls
+    ]
 
     for task in tasks:
         task_list.append(task)
@@ -79,13 +84,14 @@ async def check_img(img_urls: list) -> dict:
         else:
             coordinates.update(result)
 
-    return [coordinates, f'{len(coordinates)}/{len(img_urls)}']
+    return [coordinates, f"{len(coordinates)}/{len(img_urls)}"]
+
 
 async def stop():
-    '''Остановка обработки фотографий'''
+    """Остановка обработки фотографий"""
     if len(task_list) > 0:
         for task in task_list:
             task.cancel()
-        return 'Остановлено'
+        return "Остановлено"
     else:
-        return 'Никаких задач сейчас нет'
+        return "Никаких задач сейчас нет"

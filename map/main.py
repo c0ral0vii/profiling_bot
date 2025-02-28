@@ -4,7 +4,7 @@ import aiofiles
 async def create_html(coords: dict, user: int):
     coords = {url: coord for url, coord in coords.items() if len(coord) >= 2}
 
-    html_one = '''<!DOCTYPE HTML>
+    html_one = """<!DOCTYPE HTML>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -38,8 +38,8 @@ async def create_html(coords: dict, user: int):
 </head>
 <body>
     <div id="map"></div>
-    <script>'''
-    html_two = r'''
+    <script>"""
+    html_two = r"""
         const markerGroups = [];
 
         // Проверяем, существует ли группа маркеров, где расстояние <= 100 метров
@@ -167,10 +167,10 @@ async def create_html(coords: dict, user: int):
         info.addTo(map);
     </script>
 </body>
-</html>'''
+</html>"""
 
-    options = f'var coordinates = {coords};'
-    gen_map = f'map/generate_map/{user}/leaflet.html'
+    options = f"var coordinates = {coords};"
+    gen_map = f"map/generate_map/{user}/leaflet.html"
 
-    async with aiofiles.open(gen_map, 'w', encoding='utf-8') as file:
+    async with aiofiles.open(gen_map, "w", encoding="utf-8") as file:
         await file.write(html_one + options + html_two)
