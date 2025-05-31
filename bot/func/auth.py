@@ -8,9 +8,9 @@ async def check_password(password: str, user: int) -> str:
     return False
 
 
-async def auth_user(user: int):
-    with aiofiles.open("users.txt", "a") as f:
-        await f.write(user)
+#async def auth_user(user: int):
+#    with aiofiles.open("users.txt", "a") as f:
+#        await f.write(user)
 
 
 async def check_auth(user: int):

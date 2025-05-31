@@ -1,0 +1,163 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .leaflet-tooltip {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+        .leaflet-popup-content-wrapper {
+        width: 120%;
+        }
+
+        .leaflet-popup-content-wrapper .popup-images div {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>var coordinates = {'https://i.postimg.cc/sDWbNbFF/IMG-1458.jpg': ['56.856767', '35.875901'], 'https://i.postimg.cc/c12VT0bM/IMG-1459.jpg': ['56.856527', '35.876070'], 'https://i.postimg.cc/1RfkpfJ3/IMG-1460.jpg': ['56.856292', '35.875718'], 'https://i.postimg.cc/kG6vBrN7/IMG-1461.jpg': ['56.856071', '35.875768'], 'https://i.postimg.cc/PJgzD6KY/IMG-1462.jpg': ['56.856122', '35.875247'], 'https://i.postimg.cc/mrBjV54S/IMG-1463.jpg': ['56.855833', '35.874922'], 'https://i.postimg.cc/nzLkf9Cj/IMG-1464.jpg': ['56.856230', '35.874675'], 'https://i.postimg.cc/mD6SLZHd/IMG-1465.jpg': ['56.856630', '35.874460'], 'https://i.postimg.cc/cJhmzB4G/IMG-1466.jpg': ['56.856624', '35.873925'], 'https://i.postimg.cc/sgpKYRkX/IMG-1467.jpg': ['56.856903', '35.874238'], 'https://i.postimg.cc/CxymnK6X/IMG-1468.jpg': ['56.857036', '35.874897'], 'https://i.postimg.cc/Hs86LM3b/IMG-1469.jpg': ['56.857593', '35.874478'], 'https://i.postimg.cc/qqzjy6rV/IMG-1470.jpg': ['56.857572', '35.875157'], 'https://i.postimg.cc/rs3gJyyd/IMG-1471.jpg': ['56.857901', '35.874760'], 'https://i.postimg.cc/nVPdZ2KH/IMG-1472.jpg': ['56.857497', '35.874164'], 'https://i.postimg.cc/zBdxyS9F/IMG-1474.jpg': ['56.857381', '35.873932'], 'https://i.postimg.cc/vB8P8SSm/IMG-1475.jpg': ['56.857105', '35.873913'], 'https://i.postimg.cc/nLJRgL4B/IMG-1476.jpg': ['56.856926', '35.873670'], 'https://i.postimg.cc/HL9ZgCzK/IMG-1477.jpg': ['56.856821', '35.873444'], 'https://i.postimg.cc/htxZ2mdK/IMG-1478.jpg': ['56.857045', '35.873160'], 'https://i.postimg.cc/DyRYQ6mC/IMG-1479.jpg': ['56.857416', '35.873234'], 'https://i.postimg.cc/PrCR89fp/IMG-1480.jpg': ['56.857353', '35.872573'], 'https://i.postimg.cc/qqRZwZ8F/IMG-1481.jpg': ['56.857093', '35.872798'], 'https://i.postimg.cc/wvFGhdsJ/IMG-1483.jpg': ['56.856869', '35.872979'], 'https://i.postimg.cc/tJMvMtk4/IMG-1484.jpg': ['56.856729', '35.872410'], 'https://i.postimg.cc/qBbFq4rH/IMG-1485.jpg': ['56.856386', '35.872946'], 'https://i.postimg.cc/qRpFh7g4/IMG-1486.jpg': ['56.856446', '35.872501'], 'https://i.postimg.cc/Zq8g5Nbw/IMG-1487.jpg': ['56.856196', '35.872427'], 'https://i.postimg.cc/W4LCV8vD/IMG-1488.jpg': ['56.855992', '35.872528'], 'https://i.postimg.cc/CL5Wsd7K/IMG-1489.jpg': ['56.855747', '35.872984'], 'https://i.postimg.cc/ZKQX7Zsx/IMG-1490.jpg': ['56.855694', '35.872016'], 'https://i.postimg.cc/qvCSWY9V/IMG-1491.jpg': ['56.855504', '35.871668'], 'https://i.postimg.cc/SQDB9cW5/IMG-1492.jpg': ['56.855586', '35.871324'], 'https://i.postimg.cc/gjS1PPzd/IMG-1493.jpg': ['56.855682', '35.871047'], 'https://i.postimg.cc/ydTwvZ2D/IMG-1494.jpg': ['56.855989', '35.870722'], 'https://i.postimg.cc/Xq7thv0Q/IMG-1495.jpg': ['56.856331', '35.870735'], 'https://i.postimg.cc/rmTB1JZ6/IMG-1496.jpg': ['56.856402', '35.870781'], 'https://i.postimg.cc/VNXy0TRB/IMG-1497.jpg': ['56.856599', '35.870680'], 'https://i.postimg.cc/XYRSJ3wY/IMG-1498.jpg': ['56.856839', '35.870809'], 'https://i.postimg.cc/DwJ3nm4N/IMG-1499.jpg': ['56.857123', '35.870414'], 'https://i.postimg.cc/MKrJC1HR/IMG-1500.jpg': ['56.857015', '35.870815'], 'https://i.postimg.cc/X7v01sj4/IMG-1501.jpg': ['56.857196', '35.871499'], 'https://i.postimg.cc/T206czXt/IMG-1502.jpg': ['56.857289', '35.871882'], 'https://i.postimg.cc/50qMTGQN/IMG-1503.jpg': ['56.857117', '35.872204'], 'https://i.postimg.cc/C5hVgNbC/IMG-1504.jpg': ['56.857763', '35.873817'], 'https://i.postimg.cc/90LHF7B6/IMG-1505.jpg': ['56.857929', '35.873897'], 'https://i.postimg.cc/sXRrnyXN/IMG-1506.jpg': ['56.857925', '35.874399'], 'https://i.postimg.cc/W4ZV6t2Z/IMG-1507.jpg': ['56.858368', '35.874069'], 'https://i.postimg.cc/vZkMV5dM/IMG_1508.jpg': ['56.858543', '35.873696'], 'https://i.postimg.cc/dVLw34p4/IMG_1509.jpg': ['56.858764', '35.873042'], 'https://i.postimg.cc/DyC77tjS/IMG_1510.jpg': ['56.858804', '35.873174'], 'https://i.postimg.cc/jdqs0sXV/IMG_1511.jpg': ['56.859095', '35.872870'], 'https://i.postimg.cc/VsWYVSXB/IMG_1512.jpg': ['56.859472', '35.872869'], 'https://i.postimg.cc/sxmsQ830/IMG_1513.jpg': ['56.859270', '35.873445'], 'https://i.postimg.cc/WzTs4jck/IMG_1514.jpg': ['56.859028', '35.873728'], 'https://i.postimg.cc/wvh6HMZz/IMG_1515.jpg': ['56.859689', '35.872640'], 'https://i.postimg.cc/LXdHrLyv/IMG_1516.jpg': ['56.859799', '35.872583'], 'https://i.postimg.cc/bwBY9Kk7/IMG_1517.jpg': ['56.859658', '35.872283'], 'https://i.postimg.cc/SKYSTDGJ/IMG_1518.jpg': ['56.860015', '35.872786'], 'https://i.postimg.cc/RZFVfM61/IMG_1520.jpg': ['56.860308', '35.872599'], 'https://i.postimg.cc/CLwKhCwQ/IMG_1521.jpg': ['56.860147', '35.872171'], 'https://i.postimg.cc/dQ21cNcC/IMG_1522.jpg': ['56.860686', '35.871651'], 'https://i.postimg.cc/L6v8nqX6/IMG_1523.jpg': ['56.860711', '35.871237'], 'https://i.postimg.cc/cHYJHXKV/IMG_1524.jpg': ['56.860835', '35.871515'], 'https://i.postimg.cc/q7WR497s/IMG_1525.jpg': ['56.860782', '35.870905'], 'https://i.postimg.cc/5yV2FLLj/IMG_1526.jpg': ['56.860729', '35.870249'], 'https://i.postimg.cc/5ySN5ySg/IMG_1527.jpg': ['56.860637', '35.869648'], 'https://i.postimg.cc/VNJvyYzs/IMG_1528.jpg': ['56.860624', '35.869217'], 'https://i.postimg.cc/g2SjBwFB/IMG_1529.jpg': ['56.860490', '35.869144'], 'https://i.postimg.cc/jSdCXH97/IMG_1530.jpg': ['56.860167', '35.869385'], 'https://i.postimg.cc/ZYp9KKpC/IMG_1531.jpg': ['56.859916', '35.868976'], 'https://i.postimg.cc/CL0RZTsJ/IMG_1532.jpg': ['56.859804', '35.869386'], 'https://i.postimg.cc/hP0fTyCn/IMG_1533.jpg': ['56.859434', '35.869272'], 'https://i.postimg.cc/rsXKCvXV/IMG_1534.jpg': ['56.859325', '35.869727'], 'https://i.postimg.cc/vTrDP3bW/IMG_1535.jpg': ['56.859357', '35.870225'], 'https://i.postimg.cc/zBRyhqQ2/IMG_1536.jpg': ['56.858783', '35.870294'], 'https://i.postimg.cc/6QP7T8MG/IMG_1537.jpg': ['56.858435', '35.869754'], 'https://i.postimg.cc/52nQd7vg/IMG_1538.jpg': ['56.858349', '35.870205'], 'https://i.postimg.cc/T3R5sMyh/IMG_1539.jpg': ['56.858087', '35.870142'], 'https://i.postimg.cc/bN02LNwK/IMG_1540.jpg': ['56.857800', '35.869864'], 'https://i.postimg.cc/W4zF2Gwv/IMG_1541.jpg': ['56.857506', '35.870224'], 'https://i.postimg.cc/5NWCwFbB/IMG_1542.jpg': ['56.857596', '35.870681'], 'https://i.postimg.cc/G3yD8jw3/IMG_1543.jpg': ['56.857567', '35.871322'], 'https://i.postimg.cc/0jDKT9dK/IMG_1544.jpg': ['56.857400', '35.871095'], 'https://i.postimg.cc/76C2N35V/IMG_1545.jpg': ['56.857342', '35.870543'], 'https://i.postimg.cc/523L9Ncw/IMG_1546.jpg': ['56.857368', '35.869980'], 'https://i.postimg.cc/B6d17jDG/IMG_1547.jpg': ['56.857037', '35.869594'], 'https://i.postimg.cc/JhzJsVmS/IMG_1548.jpg': ['56.856915', '35.868967'], 'https://i.postimg.cc/VNZtMGkv/IMG_1549.jpg': ['56.856620', '35.869245'], 'https://i.postimg.cc/9X6GJntq/IMG_1550.jpg': ['56.856403', '35.869094'], 'https://i.postimg.cc/027730cX/IMG_1551.jpg': ['56.855996', '35.868888'], 'https://i.postimg.cc/K8Fty3WG/IMG_1552.jpg': ['56.856109', '35.868170'], 'https://i.postimg.cc/Znd6J8ZR/IMG_1553.jpg': ['56.856499', '35.868767'], 'https://i.postimg.cc/JngbwTfv/IMG_1554.jpg': ['56.856599', '35.867944'], 'https://i.postimg.cc/XvsfLNQV/IMG_1555.jpg': ['56.856723', '35.867425'], 'https://i.postimg.cc/05MYGsms/IMG_1556.jpg': ['56.856469', '35.866957'], 'https://i.postimg.cc/pTyD6N6K/IMG_1557.jpg': ['56.856203', '35.866932'], 'https://i.postimg.cc/DwKPyMSK/IMG_1558.jpg': ['56.856181', '35.866446'], 'https://i.postimg.cc/gcQK1Jdj/IMG_1559.jpg': ['56.856507', '35.866259'], 'https://i.postimg.cc/grbcPdSQ/IMG_1560.jpg': ['56.856683', '35.866764'], 'https://i.postimg.cc/prFV7yZK/IMG_1561.jpg': ['56.856961', '35.866631'], 'https://i.postimg.cc/x1yyk3mN/IMG_1562.jpg': ['56.857025', '35.867289'], 'https://i.postimg.cc/Wphn9ZBx/IMG_1563.jpg': ['56.856988', '35.867815'], 'https://i.postimg.cc/28WxYD8w/IMG_1564.jpg': ['56.857159', '35.868451'], 'https://i.postimg.cc/9MzQdLw8/IMG_1565.jpg': ['56.857342', '35.867832'], 'https://i.postimg.cc/XYcq4G08/IMG_1566.jpg': ['56.857443', '35.868436'], 'https://i.postimg.cc/BvmvPrbP/IMG_1567.jpg': ['56.857657', '35.868264'], 'https://i.postimg.cc/nLFzzFFt/IMG_1568.jpg': ['56.857885', '35.867987'], 'https://i.postimg.cc/gjCjk3JM/IMG_1569.jpg': ['56.858158', '35.868262'], 'https://i.postimg.cc/J7vGqCqb/IMG_1570.jpg': ['56.858310', '35.868017'], 'https://i.postimg.cc/T1Lh6tRL/IMG_1571.jpg': ['56.858666', '35.867630'], 'https://i.postimg.cc/xCFqhwSV/IMG_1572.jpg': ['56.858885', '35.867491'], 'https://i.postimg.cc/5tgXqH70/IMG_1573.jpg': ['56.859035', '35.867423'], 'https://i.postimg.cc/dVK3bRg3/IMG_1574.jpg': ['56.859333', '35.867406'], 'https://i.postimg.cc/SN9j11TH/IMG_1575.jpg': ['56.859347', '35.867104'], 'https://i.postimg.cc/85Cjy19b/IMG_1576.jpg': ['56.859534', '35.867703'], 'https://i.postimg.cc/43sK9v1q/IMG_1577.jpg': ['56.859374', '35.868113']};
+        const markerGroups = [];
+
+        // Проверяем, существует ли группа маркеров, где расстояние <= 100 метров
+        function findGroup(coord, threshold = 0) {
+            const point = turf.point([coord.lon, coord.lat]);
+
+            for (const group of markerGroups) {
+                const groupPoint = turf.point([group.lon, group.lat]);
+                const distance = turf.distance(point, groupPoint, { units: 'meters' });
+
+                if (distance <= threshold) {
+                    return group;
+                }
+            }
+            return null;
+        }
+
+        // Обработка координат
+        Object.entries(coordinates).forEach(([imageUrl, coord]) => {
+            const [lat, lon] = coord.slice(0, 2).map(c => parseFloat(c.replace(',', '.')));
+            if (isNaN(lat) || isNaN(lon)) return;
+
+            const existingGroup = findGroup({ lat, lon });
+
+            if (existingGroup) {
+                // Добавляем фото в правильную группу
+                existingGroup.images.push(imageUrl);
+                existingGroup.duplicates += 1;
+            } else {
+                // Создаем новую группу
+                markerGroups.push({
+                    lat,
+                    lon,
+                    images: [imageUrl],
+                    duplicates: 1
+                });
+            }
+        });
+
+        // Инициализация карты
+        const map = L.map('map', {
+            center: markerGroups.length > 0 
+                ? [markerGroups[0].lat, markerGroups[0].lon] 
+                : [55.5803, 37.6657],
+            zoom: 15
+        });
+
+        L.tileLayer('http://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 22,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        }).addTo(map);
+
+        let markerCount = 0;
+        let duplicateCount = 0;
+
+        // Добавление маркеров на карту
+        markerGroups.forEach((group) => {
+            const { lat, lon, images, duplicates } = group;
+
+            const marker = L.marker([lat, lon]).addTo(map);
+            markerCount++;
+            duplicateCount += duplicates - 1; // Учитываем только дополнительные дубли
+
+            // Найти ближайший маркер
+            let minDistance = Infinity;
+
+            markerGroups.forEach((otherGroup) => {
+                if (group !== otherGroup) {
+                    const from = turf.point([lon, lat]);
+                    const to = turf.point([otherGroup.lon, otherGroup.lat]);
+                    const distance = turf.distance(from, to, { units: 'meters' });
+
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                    }
+                }
+            });
+
+            // Создаем контент для всех фото в группе
+            const popupContent = `
+            <h5>Фотографий в группе: ${images.length}</h5>
+            <div class="popup-images" style="display: flex">
+                ${images.map(imageUrl => `
+                    <div style="margin: 5px;">
+                        <img src="${imageUrl}" alt="Image" width="140" height="180">
+                        <a href="${imageUrl}">Ссылка на фотографию</a>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+            var tooltipContent = `
+                <h7 style="color: yellow; font-size: 15px">${minDistance.toFixed(2)} м</h7>
+            `;
+            if (duplicates > 1) {
+    tooltipContent += `
+        <h7 style="color: red; font-size: 13px">Дубли: ${duplicates}</h7>
+    `;
+}
+            
+            const tooltipOptions = {
+                permanent: true,
+                direction: "bottom",
+                offset: L.point(-15, 25)
+            };
+
+            marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip();
+            marker.bindPopup(popupContent);
+        });
+
+        // Показать количество маркеров
+        const info = L.control();
+        info.onAdd = function () {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
+        };
+        info.update = function () {
+            this._div.innerHTML = `
+                <h4 style="color: yellowgreen; font-size: 15px">
+                    Число маркеров на карте: ${markerCount} (${duplicateCount} дублей)
+                </h4>
+            `;
+        };
+        info.addTo(map);
+    </script>
+</body>
+</html>
