@@ -39,7 +39,7 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
 
         for line in result:
             word = line[1]
-            coord = re.findall(r"([1-9]\d[.,]\d{4,6})", word)
+            coord = re.findall(r"([1-9]+[.,]\d{4,6})", word)
 
             if len(coord) == 2:
                 coord[0] = coord[0].replace(",", ".")
