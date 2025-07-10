@@ -73,6 +73,13 @@ async def change_coord_status(message: Message, state: FSMContext):
     
     data = await state.get_data()
     status = data.get("coord_status", False)
+    if status:
+        new_status = True
+    else:
+        new_status = False
+    await state.update_data(coord_status=new_status)
+    data = await state.get_data()
+    status = data.get("coord_status", False)
     
     await message.answer("Координаты с одной цифрой: " + ("✅" if status else "❌"), reply_markup=await main_menu_keyboard(status))
 
