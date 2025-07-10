@@ -67,6 +67,15 @@ async def stop_func(message: Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"Ошибка - {e}")
 
+@dp.message(F.text == "Изменить тип координат", Auth.auth)
+async def change_coord_status(message: Message, state: FSMContext):
+    """Изменение координат"""
+    
+    data = await state.get_data()
+    status = data.get("coord_status", False)
+    
+    await message.answer("Координаты с одной цифрой: " + ("✅" if status else "❌"), reply_markup=await main_menu_keyboard(status))
+
 
 @dp.message(Auth.auth)
 async def get_filesharing(message: Message, state: FSMContext):
@@ -108,17 +117,6 @@ async def check_function(message: Message, state: FSMContext):
     except Exception as e:
         await msg.delete()
         await message.answer(f"Произошла ошибка при обработке, повторите попытку({e})")
-
-
-@dp.message(F.text == "Изменить тип координат", Auth.auth)
-async def change_coord_status(message: Message, state: FSMContext):
-    """Изменение координат"""
-    
-    data = await state.get_data()
-    status = data.get("coord_status", False)
-    
-    await message.answer("Координаты с одной цифрой: " + ("✅" if status else "❌"), reply_markup=await main_menu_keyboard(status))
-
 
 async def run_bot():
     """Запуск бота"""
