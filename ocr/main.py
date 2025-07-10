@@ -19,7 +19,7 @@ pool_instance = None
 reader = Reader(["en"], gpu=False)
 
 
-async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphore):
+async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphore, coord_status: bool = False) -> dict:
     async with semaphore:
         async with aiohttp.ClientSession() as session:
             async with session.get(img_link, ssl=ctx) as response:
@@ -36,10 +36,14 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
 
         two_cords = []
         coordinates = {}
-
+        if coord_status:
+            filter = r"([1-9]+[.,]\d{4,6})"
+        else:
+            filter = r"([1-9]\d[.,]\d{4,6})"
+            
         for line in result:
             word = line[1]
-            coord = re.findall(r"([1-9]+[.,]\d{4,6})", word)
+            coord = re.findall(filter, word)
 
             if len(coord) == 2:
                 coord[0] = coord[0].replace(",", ".")
@@ -64,12 +68,12 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
 task_list = []
 
 
-async def check_img(img_urls: list) -> dict:
+async def check_img(img_urls: list, coord_status: bool = False) -> dict:
     """EasyOCR смотрит фотографию и ищет координаты на нём"""
 
     semaphore = asyncio.Semaphore(2)
     tasks = [
-        asyncio.create_task(process_img(img_link, reader, semaphore))
+        asyncio.create_task(process_img(img_link, reader, semaphore, coord_status))
         for img_link in img_urls
     ]
 
