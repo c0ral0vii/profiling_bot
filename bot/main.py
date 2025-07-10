@@ -85,7 +85,6 @@ async def change_coord_status(message: Message, state: FSMContext):
 async def get_filesharing(message: Message, state: FSMContext):
     """Проверка на файлообменник"""
 
-    user_id = message.from_user.id
     regular = r"\b(?:{})\b".format("|".join(filesharings))
     result = re.search(regular, message.text)
 
@@ -108,7 +107,7 @@ async def check_function(message: Message, state: FSMContext):
         img_urls = await get_imgs(url=message.text, user=user_id)
         await msg.edit_text(" ✅Изображения получены, получаем координаты...")
 
-        result = await check_img(img_urls=img_urls, coord_status=data.get("coord_status"), user=user_id)
+        result = await check_img(img_urls=img_urls, coord_status=data.get("coord_status"))
         await msg.edit_text(" ✅Координаты получены, создаём карту...")
 
         await create_html(coords=result[0], user=user_id)
