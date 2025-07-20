@@ -1,21 +1,20 @@
 import asyncio
 import re
 
-from aiogram import F, Bot, Dispatcher
-from aiogram.types import Message, FSInputFile
+from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart, Command, StateFilter
+from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.types import FSInputFile, Message
 
-from bot.states.fsm import AuthUser, Auth
-from bot.func.auth import check_password, check_auth
+from bot.func.auth import check_auth, check_password
+from bot.states.fsm import Auth, AuthUser
 from config.config import BOT_API_TOKEN, filesharings
 from kb.main_menu import main_menu_keyboard
 from map.files import create_new_user
-from ocr.main import check_img, stop
-from map.parsing import get_imgs
 from map.main import create_html
-
+from map.parsing import get_imgs
+from ocr.main import check_img, stop
 
 dp = Dispatcher()
 
@@ -40,7 +39,7 @@ async def login(message: Message, state: FSMContext):
         if not data.get("coord_status"):
             await state.update_data(coord_status=False)
             data = await state.get_data()
-            
+
         await message.answer(f"Вы ввели правильный пароль, можете пользоваться ботом..", reply_markup=await main_menu_keyboard(data.get("coord_status")))
         await state.set_state(Auth.auth)
     else:
@@ -67,17 +66,17 @@ async def stop_func(message: Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"Ошибка - {e}")
 
-@dp.message(F.text == "Изменить тип координат", Auth.auth)
+@dp.message(F.text == "Включить/выключить проверку Тайланда", Auth.auth)
 async def change_coord_status(message: Message, state: FSMContext):
     """Изменение координат"""
-    
+
     data = await state.get_data()
     status = data.get("coord_status", False)
     new_status = not status
-    
+
     await state.update_data(coord_status=new_status)
     status = (await state.get_data()).get("coord_status", False)
-    
+
     await message.answer("Координаты с одной цифрой: " + ("✅" if status else "❌"), reply_markup=await main_menu_keyboard(status))
 
 
@@ -100,7 +99,7 @@ async def check_function(message: Message, state: FSMContext):
         if not data.get("coord_status"):
             await state.update_data(coord_status=False)
             data = await state.get_data()
-            
+
         user_id = message.from_user.id
         msg = await message.reply("Получаем изображения с файлообменника...")
 
