@@ -1,13 +1,12 @@
-import ssl
 import asyncio
-import aiohttp
-from PIL import Image
-import numpy as np
-from io import BytesIO
 import re
+import ssl
+from io import BytesIO
 
+import aiohttp
+import numpy as np
 from easyocr import Reader
-
+from PIL import Image
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -40,7 +39,7 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
             filter = r"([1-9]+[.,]\d{4,6})"
         else:
             filter = r"([1-9]\d[.,]\d{4,6})"
-            
+
         for line in result:
             word = line[1]
             coord = re.findall(filter, word)
@@ -52,7 +51,7 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
                 coordinates[img_link] = coord
                 continue
 
-            if len(coord) == 1:
+            if len(coord) == 1 and len(coord) != 2:
                 two_cords.append(coord)
                 continue
 
@@ -71,7 +70,7 @@ task_list = []
 async def check_img(img_urls: list, coord_status: bool = False) -> dict:
     """EasyOCR смотрит фотографию и ищет координаты на нём"""
 
-    semaphore = asyncio.Semaphore(2)
+    semaphore = asyncio.Semaphore(2) # увеличить если нужно больше скорость
     tasks = [
         asyncio.create_task(process_img(img_link, reader, semaphore, coord_status))
         for img_link in img_urls
