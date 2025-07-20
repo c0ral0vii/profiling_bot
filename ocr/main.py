@@ -43,7 +43,7 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
         for line in result:
             word = line[1]
             coord = re.findall(filter, word)
-
+            print(coord)
             if len(coord) == 2:
                 coord[0] = coord[0].replace(",", ".")
                 coord[-1] = coord[-1].replace(",", ".")
@@ -70,7 +70,7 @@ task_list = []
 async def check_img(img_urls: list, coord_status: bool = False) -> dict:
     """EasyOCR смотрит фотографию и ищет координаты на нём"""
 
-    semaphore = asyncio.Semaphore(2) # увеличить если нужно больше скорость
+    semaphore = asyncio.Semaphore(4) # увеличить если нужно больше скорость
     tasks = [
         asyncio.create_task(process_img(img_link, reader, semaphore, coord_status))
         for img_link in img_urls
