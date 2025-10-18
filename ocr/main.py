@@ -18,7 +18,12 @@ pool_instance = None
 reader = Reader(["en"], gpu=False)
 
 
-async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphore, coord_status: bool = False) -> dict:
+async def process_img(
+    img_link: str,
+    reader: Reader,
+    semaphore: asyncio.Semaphore,
+    coord_status: bool = False,
+) -> dict | str:
     async with semaphore:
         async with aiohttp.ClientSession() as session:
             async with session.get(img_link, ssl=ctx) as response:
@@ -55,11 +60,13 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
                 two_cords.append(coord)
                 continue
 
-        for _ in two_cords:
+        if len(two_cords) >= 2:
             ready_coords = []
-            for cord in two_cords:
-                ready_coords.append(*cord)
-            coordinates.setdefault(img_link, ready_coords)
+            for i in range(min(2, len(two_cords))):  # Take at most 2 coordinates
+                ready_coords.append(two_cords[i][0].replace(",", "."))
+            coordinates[img_link] = ready_coords
+        elif two_cords:  # If we have only one coordinate
+            coordinates[img_link] = [two_cords[0][0].replace(",", ".")]
 
         return coordinates
 
@@ -67,10 +74,10 @@ async def process_img(img_link: str, reader: Reader, semaphore: asyncio.Semaphor
 task_list = []
 
 
-async def check_img(img_urls: list, coord_status: bool = False) -> dict:
+async def check_img(img_urls: list, coord_status: bool = False) -> list:
     """EasyOCR смотрит фотографию и ищет координаты на нём"""
 
-    semaphore = asyncio.Semaphore(4) # увеличить если нужно больше скорость
+    semaphore = asyncio.Semaphore(4)  # увеличить если нужно больше скорость
     tasks = [
         asyncio.create_task(process_img(img_link, reader, semaphore, coord_status))
         for img_link in img_urls
@@ -85,12 +92,12 @@ async def check_img(img_urls: list, coord_status: bool = False) -> dict:
         if isinstance(result, Exception):
             print(f"Ошибка: {result}")
         else:
-            coordinates.update(result)
+            coordinates.update(result)  # type: ignore
 
     return [coordinates, f"{len(coordinates)}/{len(img_urls)}"]
 
 
-async def stop():
+async def stop() -> str:
     """Остановка обработки фотографий"""
     if len(task_list) > 0:
         for task in task_list:
