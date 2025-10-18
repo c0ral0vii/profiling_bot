@@ -1,13 +1,11 @@
-import asyncio
 import re
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile, Message
 
-from bot.func.auth import check_auth, check_password
+from bot.func.auth import check_password
 from bot.states.fsm import Auth, AuthUser
 from config.config import BOT_API_TOKEN, filesharings
 from kb.main_menu import main_menu_keyboard
@@ -26,6 +24,7 @@ async def start(message: Message, state: FSMContext):
     await message.answer("Введите пароль:")
     await state.set_state(AuthUser.password)
 
+
 @dp.message(F.text, AuthUser.password)
 async def login(message: Message, state: FSMContext):
     """
@@ -40,7 +39,10 @@ async def login(message: Message, state: FSMContext):
             await state.update_data(coord_status=False)
             data = await state.get_data()
 
-        await message.answer(f"Вы ввели правильный пароль, можете пользоваться ботом..", reply_markup=await main_menu_keyboard(data.get("coord_status")))
+        await message.answer(
+            "Вы ввели правильный пароль, можете пользоваться ботом..",
+            reply_markup=await main_menu_keyboard(data.get("coord_status")),
+        )
         await state.set_state(Auth.auth)
     else:
         await state.set_state(AuthUser.password)
@@ -52,7 +54,7 @@ async def help(message: Message, state: FSMContext):
     """Помощь"""
 
     await message.reply(
-        f"Авторизуйте, далее вы можете пользоваться ботом. Далее отправьте ссылку."
+        "Авторизуйте, далее вы можете пользоваться ботом. Далее отправьте ссылку."
     )
 
 
@@ -66,6 +68,7 @@ async def stop_func(message: Message, state: FSMContext):
     except Exception as e:
         await message.answer(f"Ошибка - {e}")
 
+
 @dp.message(F.text == "Включить/выключить проверку Тайланда", Auth.auth)
 async def change_coord_status(message: Message, state: FSMContext):
     """Изменение координат"""
@@ -77,7 +80,10 @@ async def change_coord_status(message: Message, state: FSMContext):
     await state.update_data(coord_status=new_status)
     status = (await state.get_data()).get("coord_status", False)
 
-    await message.answer("Координаты с одной цифрой: " + ("✅" if status else "❌"), reply_markup=await main_menu_keyboard(status))
+    await message.answer(
+        "Координаты с одной цифрой: " + ("✅" if status else "❌"),
+        reply_markup=await main_menu_keyboard(status),
+    )
 
 
 @dp.message(Auth.auth)
@@ -90,7 +96,7 @@ async def get_filesharing(message: Message, state: FSMContext):
     if result:
         await check_function(message=message, state=state)
     else:
-        await message.reply(f"В сообщени нет ссылки поддерживаемой нашим ботом")
+        await message.reply("В сообщени нет ссылки поддерживаемой нашим ботом")
 
 
 async def check_function(message: Message, state: FSMContext):
@@ -106,7 +112,9 @@ async def check_function(message: Message, state: FSMContext):
         img_urls = await get_imgs(url=message.text, user=user_id)
         await msg.edit_text(" ✅Изображения получены, получаем координаты...")
 
-        result = await check_img(img_urls=img_urls, coord_status=data.get("coord_status"))
+        result = await check_img(
+            img_urls=img_urls, coord_status=data.get("coord_status")
+        )
         await msg.edit_text(" ✅Координаты получены, создаём карту...")
 
         await create_html(coords=result[0], user=user_id)
@@ -118,7 +126,8 @@ async def check_function(message: Message, state: FSMContext):
         )
     except Exception as e:
         await msg.delete()
-        await message.answer(f"Произошла ошибка при обработке, повторите попытку({e})")
+        await message.answer(f"Произошла ошибка при обработке, повторите попытку ({e})")
+
 
 async def run_bot():
     """Запуск бота"""

@@ -59,14 +59,14 @@ async def process_img(
             if len(coord) == 1 and len(coord) != 2:
                 two_cords.append(coord)
                 continue
-
-        if len(two_cords) >= 2:
-            ready_coords = []
-            for i in range(min(2, len(two_cords))):  # Take at most 2 coordinates
-                ready_coords.append(two_cords[i][0].replace(",", "."))
-            coordinates[img_link] = ready_coords
-        elif two_cords:  # If we have only one coordinate
-            return
+        if len(two_cords) == 2:
+            for _ in two_cords:
+                ready_coords = []
+                for cord in two_cords:
+                    ready_coords.append(*cord)
+                coordinates.setdefault(img_link, ready_coords)
+        else:
+            return None
 
         return coordinates
 
