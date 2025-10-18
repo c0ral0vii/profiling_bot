@@ -25,6 +25,7 @@ async def process_img(
     coord_status: bool = False,
 ) -> dict | str | None:
     async with semaphore:
+        img_link.replace("%IMAGE_EXT%", "jpg")
         async with aiohttp.ClientSession() as session:
             async with session.get(img_link, ssl=ctx) as response:
                 if response.status == 200:
