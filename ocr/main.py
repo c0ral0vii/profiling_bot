@@ -59,16 +59,16 @@ async def process_img(
             if len(coord) == 1 and len(coord) != 2:
                 two_cords.append(coord)
                 continue
-        if len(two_cords) == 2:
-            for _ in two_cords:
-                ready_coords = []
-                for cord in two_cords:
-                    ready_coords.append(*cord)
-                coordinates.setdefault(img_link, ready_coords)
-        else:
-            return None
 
-        return coordinates
+        if len(two_cords) == 2:
+            ready_coords = []
+            for cord_pair in two_cords:
+                if cord_pair:  # ✅ Проверка на пустоту
+                    ready_coords.append(cord_pair[0].replace(",", "."))
+            if len(ready_coords) == 2:
+                return {img_link: ready_coords}
+
+        return None
 
 
 task_list = []
@@ -91,10 +91,10 @@ async def check_img(img_urls: list, coord_status: bool = False) -> list:
     for result in results:
         if isinstance(result, Exception):
             print(f"Ошибка: {result}")
-        else:
-            if not result:
-                continue
-            coordinates.update(result)  # type: ignore
+        elif isinstance(result, dict):
+            coordinates.update(result)
+        elif result is not None:
+            print(f"Пропущен результат: {result}")
 
     return [coordinates, f"{len(coordinates)}/{len(img_urls)}"]
 
