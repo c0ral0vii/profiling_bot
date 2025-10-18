@@ -23,7 +23,7 @@ async def process_img(
     reader: Reader,
     semaphore: asyncio.Semaphore,
     coord_status: bool = False,
-) -> dict | str:
+) -> dict | str | None:
     async with semaphore:
         async with aiohttp.ClientSession() as session:
             async with session.get(img_link, ssl=ctx) as response:
@@ -66,7 +66,7 @@ async def process_img(
                 ready_coords.append(two_cords[i][0].replace(",", "."))
             coordinates[img_link] = ready_coords
         elif two_cords:  # If we have only one coordinate
-            coordinates[img_link] = [two_cords[0][0].replace(",", ".")]
+            return
 
         return coordinates
 
@@ -92,6 +92,8 @@ async def check_img(img_urls: list, coord_status: bool = False) -> list:
         if isinstance(result, Exception):
             print(f"Ошибка: {result}")
         else:
+            if not result:
+                continue
             coordinates.update(result)  # type: ignore
 
     return [coordinates, f"{len(coordinates)}/{len(img_urls)}"]
