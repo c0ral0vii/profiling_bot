@@ -22,7 +22,7 @@ ctx.verify_mode = ssl.CERT_NONE
 pool_instance = None
 reader = Reader(["en"], gpu=False)
 
-class ImprovedCoordinateExtractor:
+class DigitCoordinateExtractor:
     def __init__(self):
         # Черный список для фильтрации ложных срабатываний
         self.blacklist_patterns = [
@@ -33,23 +33,17 @@ class ImprovedCoordinateExtractor:
             r'\d+\.\d+%',  # Проценты
             r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}',  # IP-адреса
         ]
-        
-        # Белый список контекстных слов
-        self.context_words = [
-            'coord', 'latitude', 'longitude', 'lat', 'lon', 
-            'широта', 'долгота', 'координат', 'gps', 'location'
-        ]
 
     def enhance_image_quality(self, img: Image.Image) -> np.ndarray:
-        """Улучшение качества изображения для лучшего распознавания"""
+        """Улучшение качества изображения для лучшего распознавания цифр"""
         try:
-            # Увеличение резкости
+            # Увеличение резкости для цифр
             enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(2.0)
+            img = enhancer.enhance(2.5)
             
             # Увеличение контраста
             enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.5)
+            img = enhancer.enhance(2.0)
             
             # Легкое размытие для уменьшения шума
             img = img.filter(ImageFilter.MedianFilter(3))
@@ -58,10 +52,24 @@ class ImprovedCoordinateExtractor:
             img = img.convert("L")
             img_array = np.array(img)
             
+            # Нормализация контраста
+            img_array = self._adaptive_contrast(img_array)
+            
             return img_array
         except Exception as e:
             logger.warning(f"Ошибка улучшения изображения: {e}")
             return np.array(img.convert("L"))
+
+    def _adaptive_contrast(self, img_array: np.ndarray) -> np.ndarray:
+        """Адаптивное улучшение контраста для цифр"""
+        # Простое линейное растяжение гистограммы
+        min_val = np.percentile(img_array, 5)
+        max_val = np.percentile(img_array, 95)
+        
+        if max_val > min_val:
+            img_array = np.clip((img_array - min_val) * 255.0 / (max_val - min_val), 0, 255)
+        
+        return img_array.astype(np.uint8)
 
     def is_plausible_coordinate(self, coord: str) -> bool:
         """Проверка, является ли строка правдоподобной координатой"""
@@ -103,16 +111,18 @@ class ImprovedCoordinateExtractor:
             
         return False
 
-    def extract_all_coordinates(self, text: str, coord_status: bool = False) -> List[str]:
-        """Извлечение всех возможных координат из текста"""
-        # Основные паттерны для координат
+    def extract_coordinates_from_digits(self, text: str, coord_status: bool = False) -> List[str]:
+        """Извлечение координат из текста, фокусируясь на цифрах"""
+        # Более гибкие паттерны для координат
         if coord_status:
             patterns = [
-                r'[1-9]+[.,]\d{4,8}',  # 30.123456
+                r'[1-9]\d*[.,]\d{4,8}',  # 30.123456, 1.123456
+                r'\d{1,3}[.,]\d{4,8}',   # 123.456789
             ]
         else:
             patterns = [
-                r'[1-9]\d[.,]\d{4,8}',  # 30.123456
+                r'[1-9]\d[.,]\d{4,8}',   # 30.123456
+                r'\d{2,3}[.,]\d{4,8}',   # 123.456789
             ]
         
         all_coords = []
@@ -131,18 +141,10 @@ class ImprovedCoordinateExtractor:
                 if self.is_plausible_coordinate(coord):
                     all_coords.append(coord)
         
-        # Удаление дубликатов с сохранением порядка
-        seen = set()
-        unique_coords = []
-        for coord in all_coords:
-            if coord not in seen:
-                seen.add(coord)
-                unique_coords.append(coord)
-                
-        return unique_coords
+        return all_coords
 
-# Глобальный экземпляр улучшенного экстрактора
-extractor = ImprovedCoordinateExtractor()
+# Глобальный экземпляр экстрактора
+digit_extractor = DigitCoordinateExtractor()
 
 async def process_img(
     img_link: str,
@@ -163,65 +165,103 @@ async def process_img(
                         return f"Ошибка - {img_link}"
 
             img = Image.open(BytesIO(img_data))
-            img_processed = extractor.enhance_image_quality(img)
+            img_processed = digit_extractor.enhance_image_quality(img)
 
-            # Распознавание текста с улучшенными параметрами
-            result = reader.readtext(
+            # ПЕРВЫЙ ПРОХОД: распознавание ТОЛЬКО цифр и символов координат
+            digit_result = reader.readtext(
+                img_processed,
+                allowlist='0123456789.,- ',  # Только цифры и символы координат
+                detail=1,
+                paragraph=False,
+                contrast_ths=0.1,
+                adjust_contrast=0.8,
+                text_threshold=0.6,  # Ниже порог для цифр
+                low_text=0.3,
+                link_threshold=0.3
+            )
+
+            # ВТОРОЙ ПРОХОД: обычное распознавание для контекста
+            normal_result = reader.readtext(
                 img_processed,
                 detail=1,
                 paragraph=False,
                 contrast_ths=0.1,
                 adjust_contrast=0.7,
                 text_threshold=0.7,
-                low_text=0.4
+                low_text=0.4,
+                link_threshold=0.4
             )
 
             all_coordinates = []
-            individual_coords = []
             
-            for line in result:
+            # Обрабатываем результаты распознавания цифр (основной источник)
+            for line in digit_result:
                 bbox, text, confidence = line
                 
-                # Фильтр по уверенности
+                # Более низкий порог для цифр
+                if confidence < 0.4:
+                    continue
+                    
+                logger.info(f"Цифры распознаны: '{text}' (уверенность: {confidence:.2f})")
+                
+                # Извлечение координат из цифрового текста
+                coords = digit_extractor.extract_coordinates_from_digits(text, coord_status)
+                all_coordinates.extend(coords)
+            
+            # Дополнительно обрабатываем обычные результаты для контекста
+            for line in normal_result:
+                bbox, text, confidence = line
+                
                 if confidence < 0.5:
                     continue
                     
-                logger.info(f"Распознано: '{text}' (уверенность: {confidence:.2f})")
-                
-                # Извлечение координат из текста
-                coords = extractor.extract_all_coordinates(text, coord_status)
-                
-                # Если нашли 2 координаты в одном тексте - сразу возвращаем
-                if len(coords) == 2:
-                    coords[0] = coords[0].replace(",", ".")
-                    coords[1] = coords[1].replace(",", ".")
-                    return {img_link: coords}
-                
-                # Сохраняем одиночные координаты
-                individual_coords.extend(coords)
-                all_coordinates.extend(coords)
+                # Ищем координаты в обычном тексте
+                coords = digit_extractor.extract_coordinates_from_digits(text, coord_status)
+                if coords:
+                    logger.info(f"Координаты в контексте: '{text}' -> {coords}")
+                    all_coordinates.extend(coords)
             
-            # Удаление дубликатов из individual_coords
-            unique_individual = []
+            # Удаление дубликатов с сохранением порядка
+            unique_coords = []
             seen = set()
-            for coord in individual_coords:
+            for coord in all_coordinates:
                 if coord not in seen:
                     seen.add(coord)
-                    unique_individual.append(coord)
+                    unique_coords.append(coord)
             
-            # Если нашли ровно 2 одиночные координаты - возвращаем их
-            if len(unique_individual) == 2:
+            logger.info(f"Все найденные координаты для {img_link}: {unique_coords}")
+            
+            # Логика группировки как в оригинальном алгоритме
+            two_cords = []
+            coordinates = {}
+            
+            # Если нашли 2 координаты в одном наборе
+            if len(unique_coords) == 2:
                 ready_coords = []
-                for coord in unique_individual:
+                for coord in unique_coords:
                     ready_coords.append(coord.replace(",", "."))
                 return {img_link: ready_coords}
             
-            # Если нашли больше 2 координат - берем первые 2
-            elif len(unique_individual) > 2:
+            # Если нашли больше 2 координат, пытаемся найти пары
+            elif len(unique_coords) > 2:
+                # Берем первые 2 координаты (самые надежные)
                 ready_coords = []
-                for coord in unique_individual[:2]:
+                for coord in unique_coords[:2]:
                     ready_coords.append(coord.replace(",", "."))
                 return {img_link: ready_coords}
+            
+            # Если нашли 1 координату, сохраняем для возможной пары
+            elif len(unique_coords) == 1:
+                two_cords.append([unique_coords[0]])
+            
+            # Старая логика для совместимости
+            if len(two_cords) == 2:
+                ready_coords = []
+                for cord_pair in two_cords:
+                    if cord_pair:
+                        ready_coords.append(cord_pair[0].replace(",", "."))
+                if len(ready_coords) == 2:
+                    return {img_link: ready_coords}
 
             return None
                 
@@ -236,9 +276,9 @@ task_list = []
 
 
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
-    """Улучшенный EasyOCR для поиска координат на фотографиях"""
+    """Улучшенный EasyOCR с фокусом на цифрах"""
 
-    semaphore = asyncio.Semaphore(4)  # увеличить если нужно больше скорость
+    semaphore = asyncio.Semaphore(4)
     tasks = [
         asyncio.create_task(process_img(img_link, reader, semaphore, coord_status))
         for img_link in img_urls
