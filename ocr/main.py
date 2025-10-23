@@ -167,21 +167,8 @@ async def process_img(
             img = Image.open(BytesIO(img_data))
             img_processed = digit_extractor.enhance_image_quality(img)
 
-            # ПЕРВЫЙ ПРОХОД: распознавание ТОЛЬКО цифр и символов координат
-            digit_result = reader.readtext(
-                img_processed,
-                allowlist='0123456789.,- ',  # Только цифры и символы координат
-                detail=1,
-                paragraph=False,
-                contrast_ths=0.1,
-                adjust_contrast=0.8,
-                text_threshold=0.6,  # Ниже порог для цифр
-                low_text=0.3,
-                link_threshold=0.3
-            )
-
-            # ВТОРОЙ ПРОХОД: обычное распознавание для контекста
-            normal_result = reader.readtext(
+            # Распознавание текста с улучшенными параметрами
+            result = reader.readtext(
                 img_processed,
                 detail=1,
                 paragraph=False,
@@ -192,79 +179,45 @@ async def process_img(
                 link_threshold=0.4
             )
 
-            all_coordinates = []
-            
-            # Обрабатываем результаты распознавания цифр (основной источник)
-            for line in digit_result:
+            two_cords = []
+            coordinates = {}
+
+            for line in result:
                 bbox, text, confidence = line
                 
-                # Более низкий порог для цифр
-                if confidence < 0.4:
-                    continue
-                    
-                logger.info(f"Цифры распознаны: '{text}' (уверенность: {confidence:.2f})")
-                
-                # Извлечение координат из цифрового текста
-                coords = digit_extractor.extract_coordinates_from_digits(text, coord_status)
-                all_coordinates.extend(coords)
-            
-            # Дополнительно обрабатываем обычные результаты для контекста
-            for line in normal_result:
-                bbox, text, confidence = line
-                
+                # Фильтр по уверенности
                 if confidence < 0.5:
                     continue
                     
-                # Ищем координаты в обычном тексте
+                logger.info(f"Распознано: '{text}' (уверенность: {confidence:.2f})")
+                
+                # Извлечение координат из текста с помощью улучшенного метода
                 coords = digit_extractor.extract_coordinates_from_digits(text, coord_status)
-                if coords:
-                    logger.info(f"Координаты в контексте: '{text}' -> {coords}")
-                    all_coordinates.extend(coords)
-            
-            # Удаление дубликатов с сохранением порядка
-            unique_coords = []
-            seen = set()
-            for coord in all_coordinates:
-                if coord not in seen:
-                    seen.add(coord)
-                    unique_coords.append(coord)
-            
-            logger.info(f"Все найденные координаты для {img_link}: {unique_coords}")
-            
-            # Логика группировки как в оригинальном алгоритме
-            two_cords = []
-            coordinates = {}
-            
-            # Если нашли 2 координаты в одном наборе
-            if len(unique_coords) == 2:
+                
+                # Логика как в оригинале: если в одной строке найдено 2 координаты, возвращаем их
+                if len(coords) == 2:
+                    # Нормализация формата
+                    coords[0] = coords[0].replace(",", ".")
+                    coords[1] = coords[1].replace(",", ".")
+                    coordinates[img_link] = coords
+                    return {img_link: coords}
+
+                # Если найдена одна координата, сохраняем для возможной пары
+                if len(coords) == 1:
+                    two_cords.append(coords)
+
+            # Если после обработки всех строк у нас есть 2 одиночные координаты, возвращаем их
+            if len(two_cords) >= 2:
                 ready_coords = []
-                for coord in unique_coords:
-                    ready_coords.append(coord.replace(",", "."))
-                return {img_link: ready_coords}
-            
-            # Если нашли больше 2 координат, пытаемся найти пары
-            elif len(unique_coords) > 2:
-                # Берем первые 2 координаты (самые надежные)
-                ready_coords = []
-                for coord in unique_coords[:2]:
-                    ready_coords.append(coord.replace(",", "."))
-                return {img_link: ready_coords}
-            
-            # Если нашли 1 координату, сохраняем для возможной пары
-            elif len(unique_coords) == 1:
-                two_cords.append([unique_coords[0]])
-            
-            # Старая логика для совместимости
-            if len(two_cords) == 2:
-                ready_coords = []
-                for cord_pair in two_cords:
-                    if cord_pair:
-                        ready_coords.append(cord_pair[0].replace(",", "."))
+                # Берем первые две координаты
+                for i in range(2):
+                    if two_cords[i]:
+                        ready_coords.append(two_cords[i][0].replace(",", "."))
                 if len(ready_coords) == 2:
                     return {img_link: ready_coords}
 
             return None
-                
+
         except asyncio.TimeoutError:
             return f"Таймаут - {img_link}"
         except Exception as e:
