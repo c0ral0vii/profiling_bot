@@ -37,7 +37,7 @@ async def get_imgs(url: str, user: int):
     # Если это страница галереи (первая страница)
     if "gallery" in url:
         # Находим все элементы с миниатюрами
-        thumb_containers = soup.find_all("div", class_="thumb-container")
+        thumb_containers = soup.find_all("div", class_="col")
         
         for container in thumb_containers:
             # Извлекаем hotlink из data-атрибутов
