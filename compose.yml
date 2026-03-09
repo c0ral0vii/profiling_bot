@@ -4,7 +4,7 @@ services:
     container_name: profiling_bot
     env_file: .env
     command: ./scripts/entrypoint-bot.sh
-    restart: unless-stoped
+    restart: unless-stopped
     volumes:
       - ./.tmp/bot.venv:/app/.venv
       - .:/app
