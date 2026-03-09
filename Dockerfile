@@ -1,10 +1,13 @@
-FROM python:3.12-slim
+FROM alpine:3.21
 
-RUN python3 -m venv venv
+ENV PATH="/root/.local/bin:${PATH}"
+WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install -r ./requirements.txt
+RUN apk add --no-cache curl tzdata ffmpeg && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    uv python install 3.10.12
 
-COPY . ./
+COPY . .
+RUN chmod +x ./scripts/*.sh
 
-CMD ["python", "run.py"]
+ENTRYPOINT ["sh"]
