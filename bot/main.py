@@ -100,6 +100,7 @@ async def get_filesharing(message: Message, state: FSMContext):
 
 
 async def check_function(message: Message, state: FSMContext):
+    """Проверка и обработка изображений"""
     try:
         data = await state.get_data()
         if not data.get("coord_status"):
@@ -120,13 +121,52 @@ async def check_function(message: Message, state: FSMContext):
         await create_html(coords=result[0], user=user_id)
         await msg.delete()
 
+        # Отправляем карту
         await message.reply_document(
             FSInputFile(path=f"map/generate_map/{str(user_id)}/leaflet.html"),
             caption=f"Готово ✅, {result[-1]}",
         )
+
+        # Отправляем необработанные изображения ссылками
+        processed_coords = result[0]
+        processed_urls = set(processed_coords.keys())
+        unprocessed_urls = [url for url in img_urls if url not in processed_urls]
+
+        if unprocessed_urls:
+            # Формируем сообщение со ссылками на необработанные изображения
+            links_message = "📸 Необработанные изображения:\n"
+            for i, url in enumerate(unprocessed_urls, 1):
+                links_message += f"{i}. {url}\n"
+
+            # Разбиваем на сообщения по 4000 символов
+            await send_long_message(links_message, message)
+
     except Exception as e:
         await msg.delete()
         await message.answer(f"Произошла ошибка при обработке, повторите попытку ({e})")
+
+
+async def send_long_message(text: str, message: Message, max_length: int = 4000):
+    """Отправка длинного сообщения с разбивкой на части"""
+    parts = []
+
+    # Разбиваем текст на части по max_length символов
+    while len(text) > max_length:
+        # Ищем последнюю новую строку в пределах max_length
+        split_pos = text.rfind('\n', 0, max_length)
+        if split_pos == -1:
+            split_pos = max_length
+
+        parts.append(text[:split_pos])
+        text = text[split_pos:].lstrip()
+
+    if text:
+        parts.append(text)
+
+    # Отправляем каждую часть
+    for part in parts:
+        if part.strip():
+            await message.answer(part)
 
 
 async def run_bot():

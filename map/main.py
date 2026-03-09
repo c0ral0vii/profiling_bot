@@ -34,10 +34,31 @@ async def create_html(coords: dict, user: int):
         .leaflet-popup-content-wrapper .popup-images div {
             margin: 5px;
         }
+        .filter-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            padding: 10px 15px;
+            background: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .filter-button:hover {
+            background: #f0f0f0;
+        }
+        .filter-button.active {
+            background: #4CAF50;
+            color: white;
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
+    <button class="filter-button" id="filterButton" onclick="toggleFilter()">📍 Расстояние < 20м</button>
     <script>"""
     html_two = r"""
         const markerGroups = [];
@@ -117,6 +138,11 @@ async def create_html(coords: dict, user: int):
                     }
                 }
             });
+            
+            // Сохраняем minDistance и marker в объект группы для фильтрации
+            group.minDistance = minDistance;
+            group.marker = marker;
+            group.tooltip = marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip();
 
             // Создаем контент для всех фото в группе
             const popupContent = `
@@ -146,7 +172,6 @@ async def create_html(coords: dict, user: int):
                 offset: L.point(-15, 25)
             };
 
-            marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip();
             marker.bindPopup(popupContent);
         });
 
@@ -165,6 +190,32 @@ async def create_html(coords: dict, user: int):
             `;
         };
         info.addTo(map);
+        
+        // Фильтрация маркеров по расстоянию
+        let filterEnabled = false;
+        
+        function toggleFilter() {
+            filterEnabled = !filterEnabled;
+            const button = document.getElementById('filterButton');
+            button.classList.toggle('active', filterEnabled);
+            
+            markerGroups.forEach((marker) => {
+                if (filterEnabled) {
+                    // Показываем только маркеры с расстоянием < 20м
+                    if (marker.minDistance < 20) {
+                        marker.marker.addTo(map);
+                        marker.tooltip.addTo(map);
+                    } else {
+                        marker.marker.remove();
+                        marker.tooltip.remove();
+                    }
+                } else {
+                    // Показываем все маркеры
+                    marker.marker.addTo(map);
+                    marker.tooltip.addTo(map);
+                }
+            });
+        }
     </script>
 </body>
 </html>"""
