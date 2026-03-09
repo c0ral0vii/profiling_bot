@@ -5,10 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 
-[tool.uv]
-required-environments = [
-    "sys_platform == 'linux' and platform_machine == 'x86_64'",
-]
+
 
 dependencies = [
     "aiogram>=3.26.0",
@@ -25,4 +22,9 @@ dependencies = [
     "aiofiles>=25.1.0",
     "numpy>=2.2.6",
     "pillow>=12.1.1",
+]
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
