@@ -1,5 +1,6 @@
 import aiofiles
 import aiohttp
+from urllib.parse import quote
 from bs4 import BeautifulSoup
 from .download import get_source_html
 
@@ -46,8 +47,9 @@ async def get_imgs(url: str, user: int):
             image_ext = container.get("data-ext")
             
             if hotlink and image_name and image_ext:
-                # Формируем прямую ссылку на изображение
-                img_url = f"https://i.postimg.cc/{hotlink}/{image_name}.{image_ext}"
+                # Формируем прямую ссылку на изображение (кодируем пробелы)
+                encoded_name = quote(f"{image_name}.{image_ext}", safe="")
+                img_url = f"https://i.postimg.cc/{hotlink}/{encoded_name}"
                 img_urls.append(img_url)
     
     # Если это страница отдельного изображения (вторая страница)

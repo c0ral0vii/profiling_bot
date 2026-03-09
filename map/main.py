@@ -138,11 +138,6 @@ async def create_html(coords: dict, user: int):
                     }
                 }
             });
-            
-            // Сохраняем minDistance и marker в объект группы для фильтрации
-            group.minDistance = minDistance;
-            group.marker = marker;
-            group.tooltip = marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip();
 
             // Создаем контент для всех фото в группе
             const popupContent = `
@@ -165,12 +160,17 @@ async def create_html(coords: dict, user: int):
         <h7 style="color: red; font-size: 13px">Дубли: ${duplicates}</h7>
     `;
 }
-            
+
             const tooltipOptions = {
                 permanent: true,
                 direction: "bottom",
                 offset: L.point(-15, 25)
             };
+
+            // Сохраняем minDistance и marker в объект группы для фильтрации
+            group.minDistance = minDistance;
+            group.marker = marker;
+            group.tooltip = marker.bindTooltip(tooltipContent, tooltipOptions).openTooltip();
 
             marker.bindPopup(popupContent);
         });
