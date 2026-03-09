@@ -6,7 +6,6 @@ services:
     command: ./scripts/entrypoint-bot.sh
     restart: unless-stopped
     volumes:
-      - ./.tmp/bot.venv:/app/.venv
       - .:/app
     ports:
       - 127.0.0.1:8001:8000

@@ -23,8 +23,3 @@ dependencies = [
     "numpy>=2.2.6",
     "pillow>=12.1.1",
 ]
-
-[tool.uv]
-required-environments = [
-    "sys_platform == 'linux' and platform_machine == 'x86_64'",
-]
