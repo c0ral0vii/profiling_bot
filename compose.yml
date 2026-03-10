@@ -3,6 +3,8 @@ services:
     build: .
     container_name: profiling_bot
     env_file: .env
+    environment:
+      - PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
     command: ./scripts/entrypoint-bot.sh
     restart: unless-stopped
     volumes:
