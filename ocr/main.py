@@ -1,16 +1,19 @@
 import asyncio
+import logging
 import re
 import ssl
 from io import BytesIO
 from typing import List
+
 import aiohttp
 import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter
-import logging
 from paddleocr import PaddleOCR
+from PIL import Image, ImageEnhance
 
 # Детальное логирование
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -20,13 +23,14 @@ ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
 # Инициализация PaddleOCR PP-OCRv5 (глобальный экземпляр)
+# Используем правильный API согласно документации
 ocr = PaddleOCR(
-    use_angle_cls=True,
-    lang='en',
-    use_gpu=False,
-    show_log=False,
-    det_model_name='PP-OCRv5',
-    rec_model_name='PP-OCRv5'
+    text_detection_model_name="PP-OCRv5_mobile_det",
+    text_recognition_model_name="PP-OCRv5_mobile_rec",
+    use_doc_orientation_classify=False,
+    use_doc_unwarping=False,
+    use_textline_orientation=False,
+    text_rec_score_thresh=0.0,
 )
 
 pool_instance = None
@@ -36,17 +40,17 @@ class DebugCoordinateExtractor:
     def __init__(self):
         self.original_patterns = {
             False: r"([1-9]\d[.,]\d{4,6})",  # Оригинальный паттерн для coord_status=False
-            True: r"([1-9]+[.,]\d{4,6})"     # Оригинальный паттерн для coord_status=True
+            True: r"([1-9]+[.,]\d{4,6})",  # Оригинальный паттерн для coord_status=True
         }
 
         # Черный список для фильтрации ложных срабатываний
         self.blacklist_patterns = [
-            r'\d{1,2}[./-]\d{1,2}[./-]\d{2,4}',  # Даты
-            r'\d+\.\d+\+-\d+\.\d+',  # Погрешности 447.86+-3.00
-            r'\d+\.\d+[мm]',  # Метры 10.24м
-            r'v?\d+\.\d+\.\d+',  # Версии ПО v1.2.3
-            r'\d+\.\d+%',  # Проценты
-            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}',  # IP-адреса
+            r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}",  # Даты
+            r"\d+\.\d+\+-\d+\.\d+",  # Погрешности 447.86+-3.00
+            r"\d+\.\d+[мm]",  # Метры 10.24м
+            r"v?\d+\.\d+\.\d+",  # Версии ПО v1.2.3
+            r"\d+\.\d+%",  # Проценты
+            r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # IP-адреса
         ]
 
     def enhance_image_quality(self, img: Image.Image) -> np.ndarray:
@@ -69,22 +73,28 @@ class DebugCoordinateExtractor:
             logger.warning(f"Ошибка улучшения изображения: {e}")
             return np.array(img.convert("L"))
 
-    def extract_coordinates_original(self, text: str, coord_status: bool = False) -> List[str]:
+    def extract_coordinates_original(
+        self, text: str, coord_status: bool = False
+    ) -> List[str]:
         """Оригинальный метод извлечения координат"""
         pattern = self.original_patterns[coord_status]
         coords = re.findall(pattern, text)
-        logger.debug(f"ОРИГИНАЛЬНЫЙ МЕТОД: текст='{text}', паттерн='{pattern}', найдено={coords}")
+        logger.debug(
+            f"ОРИГИНАЛЬНЫЙ МЕТОД: текст='{text}', паттерн='{pattern}', найдено={coords}"
+        )
         return coords
 
-    def extract_coordinates_improved(self, text: str, coord_status: bool = False) -> List[str]:
+    def extract_coordinates_improved(
+        self, text: str, coord_status: bool = False
+    ) -> List[str]:
         """Улучшенный метод извлечения координат"""
         if coord_status:
             patterns = [
-                r'[1-9]+[.,]\d{4,8}',  # Оригинальный + расширенный
+                r"[1-9]+[.,]\d{4,8}",  # Оригинальный + расширенный
             ]
         else:
             patterns = [
-                r'[1-9]\d[.,]\d{4,8}',  # Оригинальный + расширенный
+                r"[1-9]\d[.,]\d{4,8}",  # Оригинальный + расширенный
             ]
 
         all_coords = []
@@ -92,7 +102,7 @@ class DebugCoordinateExtractor:
             matches = re.finditer(pattern, text)
             for match in matches:
                 coord = match.group()
-                coord = coord.replace(',', '.')
+                coord = coord.replace(",", ".")
 
                 # Пропускаем явные ложные срабатывания
                 if self.is_false_positive(text, coord):
@@ -114,7 +124,7 @@ class DebugCoordinateExtractor:
                 return True
 
         # Специфичные проверки для координат
-        if re.match(r'^\d{1,2}\.\d{1,2}$', coord):  # 10.24 - вероятно не координата
+        if re.match(r"^\d{1,2}\.\d{1,2}$", coord):  # 10.24 - вероятно не координата
             return True
 
         return False
@@ -140,7 +150,9 @@ async def process_img(
                 async with session.get(img_link, ssl=ctx) as response:
                     if response.status == 200:
                         img_data = await response.read()
-                        logger.debug(f"Изображение загружено успешно, размер: {len(img_data)} байт")
+                        logger.debug(
+                            f"Изображение загружено успешно, размер: {len(img_data)} байт"
+                        )
                     else:
                         logger.error(f"Ошибка загрузки изображения: {response.status}")
                         return f"Ошибка - {img_link}"
@@ -149,18 +161,31 @@ async def process_img(
             img_processed = debug_extractor.enhance_image_quality(img)
 
             # Распознавание текста через PaddleOCR PP-OCRv5
-            # PaddleOCR возвращает: [[[[x1,y1],[x2,y2],[x3,y3],[x4,y4]], (text, confidence)], ...]
-            result = ocr.ocr(img_processed, cls=True)
-            
+            # Используем predict() согласно официальной документации
+            result = ocr.predict(img_processed)
+
             # Обработка результата PaddleOCR
+            # result - это итератор объектов результата
             ocr_results = []
-            if result and result[0]:
-                for line in result[0]:
-                    bbox = line[0]  # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
-                    text = line[1][0]  # распознанный текст
-                    confidence = line[1][1]  # уверенность
-                    ocr_results.append((bbox, text, confidence))
-            
+            for res in result:
+                # Извлекаем данные из результата
+                # res.rec_texts - список распознанных текстов
+                # res.rec_scores - массив уверенностей распознавания
+                # res.rec_boxes - координаты рамок
+                if hasattr(res, "rec_texts") and res.rec_texts:
+                    for i, text in enumerate(res.rec_texts):
+                        confidence = (
+                            float(res.rec_scores[i])
+                            if hasattr(res, "rec_scores") and i < len(res.rec_scores)
+                            else 0.0
+                        )
+                        bbox = (
+                            res.rec_boxes[i]
+                            if hasattr(res, "rec_boxes") and i < len(res.rec_boxes)
+                            else None
+                        )
+                        ocr_results.append((bbox, text, confidence))
+
             logger.info(f"Распознано текстовых блоков: {len(ocr_results)}")
 
             two_cords = []
@@ -175,11 +200,15 @@ async def process_img(
                 logger.info(f"Блок {i}: '{text}' (уверенность: {confidence:.2f})")
 
                 # ОРИГИНАЛЬНЫЙ МЕТОД
-                original_coords = debug_extractor.extract_coordinates_original(text, coord_status)
+                original_coords = debug_extractor.extract_coordinates_original(
+                    text, coord_status
+                )
                 all_original_coords.extend(original_coords)
 
                 # УЛУЧШЕННЫЙ МЕТОД
-                improved_coords = debug_extractor.extract_coordinates_improved(text, coord_status)
+                improved_coords = debug_extractor.extract_coordinates_improved(
+                    text, coord_status
+                )
                 all_improved_coords.extend(improved_coords)
 
                 # Оригинальная логика обработки
@@ -187,7 +216,9 @@ async def process_img(
                     original_coords[0] = original_coords[0].replace(",", ".")
                     original_coords[1] = original_coords[1].replace(",", ".")
                     coordinates[img_link] = original_coords
-                    logger.info(f"ОРИГИНАЛЬНЫЙ МЕТОД НАШЕЛ 2 КООРДИНАТЫ: {original_coords}")
+                    logger.info(
+                        f"ОРИГИНАЛЬНЫЙ МЕТОД НАШЕЛ 2 КООРДИНАТЫ: {original_coords}"
+                    )
                     continue
 
                 if len(original_coords) == 1 and len(original_coords) != 2:
@@ -242,30 +273,25 @@ async def check_img(img_urls: list, coord_status: bool = False) -> list:
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     coordinates = {}
-    stats = {
-        'total': len(img_urls),
-        'success': 0,
-        'errors': 0,
-        'with_coords': 0
-    }
+    stats = {"total": len(img_urls), "success": 0, "errors": 0, "with_coords": 0}
 
     for result in results:
         if isinstance(result, Exception):
             logger.error(f"Ошибка: {result}")
-            stats['errors'] += 1
+            stats["errors"] += 1
         elif isinstance(result, dict):
             coordinates.update(result)
-            stats['success'] += 1
-            stats['with_coords'] += 1
+            stats["success"] += 1
+            stats["with_coords"] += 1
             logger.info(f"Успешно обработан с координатами: {list(result.keys())[0]}")
-        elif isinstance(result, str) and result.startswith('Ошибка'):
+        elif isinstance(result, str) and result.startswith("Ошибка"):
             logger.error(f"Ошибка обработки: {result}")
-            stats['errors'] += 1
+            stats["errors"] += 1
         else:
-            stats['success'] += 1
+            stats["success"] += 1
             logger.info("Обработан без координат")
 
-    logger.info(f"=== ИТОГОВАЯ СТАТИСТИКА ===")
+    logger.info("=== ИТОГОВАЯ СТАТИСТИКА ===")
     logger.info(f"Обработано: {stats['success']}/{stats['total']}")
     logger.info(f"С координатами: {stats['with_coords']}")
     logger.info(f"Ошибок: {stats['errors']}")
