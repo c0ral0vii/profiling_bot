@@ -47,6 +47,7 @@ safe_runtime_kwargs = {
     "enable_hpi": False,
     "enable_mkldnn": False,
     "enable_cinn": False,
+    "cpu_threads": 2,
 }
 
 try:
@@ -78,7 +79,59 @@ class DebugCoordinateExtractor:
     def normalize_text_for_coords(self, text: str) -> str:
         """Нормализация OCR-артефактов в числах координат."""
         # OCR часто путает десятичную точку с ':' или ';' (например 55:814349).
-        return re.sub(r"(?<=\d)[:;](?=\d)", ".", text)
+        text = re.sub(r"(?<=\d)[:;](?=\d)", ".", text)
+        # Встречаются нестандартные разделители между двумя координатами.
+        text = text.replace("±", ",")
+        text = re.sub(r"(?<=\d)\s*[/|]\s*(?=[+\-]?\d)", ",", text)
+        # Склейка разрыва внутри координаты: "+55 768095" -> "+55768095".
+        text = re.sub(r"([+\-]\d{1,2})\s+(\d{4,10})", r"\1\2", text)
+        return text
+
+    def _repair_compact_coordinate_token(
+        self, token: str, coord_status: bool = False
+    ) -> str | None:
+        """
+        Восстанавливает координату из слитного числового токена без точки:
+        37242142 -> 37.242142, 551769182 -> 55.1769182.
+        """
+        sign = "-" if token.startswith("-") else ""
+        digits = re.sub(r"\D", "", token)
+
+        if len(digits) < 7:
+            return None
+
+        # Частая ошибка OCR: лишняя первая цифра перед широтой (455767579 -> 55.767579).
+        if len(digits) >= 9 and digits[0] in {"3", "4"}:
+            try:
+                repaired_head = int(digits[1:3])
+                if 50 <= repaired_head <= 89:
+                    digits = digits[1:]
+            except ValueError:
+                pass
+
+        preferred_degree_len = 1 if coord_status else 2
+        for degree_len in (preferred_degree_len, 2, 3):
+            if len(digits) - degree_len < 4:
+                continue
+
+            int_part = digits[:degree_len]
+            frac_part = digits[degree_len:]
+
+            if len(frac_part) > 8:
+                frac_part = frac_part[:8]
+            if len(frac_part) < 4:
+                continue
+
+            candidate = f"{int_part}.{frac_part}"
+            try:
+                value = float(candidate)
+            except ValueError:
+                continue
+
+            if 0 < value <= 180:
+                return f"{sign}{candidate}"
+
+        return None
 
     def enhance_image_quality(self, img: Image.Image) -> np.ndarray:
         """Улучшение качества изображения для лучшего распознавания"""
@@ -140,6 +193,19 @@ class DebugCoordinateExtractor:
                     continue
 
                 all_coords.append(coord)
+
+        # Фолбэк для случаев, где OCR "съел" десятичную точку в одной из координат.
+        compact_tokens = re.findall(r"[+\-]?\d{7,10}", normalized_text)
+        for token in compact_tokens:
+            repaired = self._repair_compact_coordinate_token(token, coord_status)
+            if not repaired:
+                continue
+            if self.is_false_positive(normalized_text, repaired):
+                continue
+            all_coords.append(repaired)
+
+        # Дедупликация с сохранением порядка.
+        all_coords = list(dict.fromkeys(all_coords))
 
         logger.debug(
             f"УЛУЧШЕННЫЙ МЕТОД: текст='{text}', normalized='{normalized_text}', найдено={all_coords}"
@@ -339,16 +405,36 @@ async def process_img(
                 bbox, text, confidence = line
                 logger.info(f"Блок {i}: '{text}' (уверенность: {confidence:.2f})")
 
-                # ОРИГИНАЛЬНЫЙ МЕТОД
-                original_coords = debug_extractor.extract_coordinates_original(
-                    text, coord_status
-                )
-                all_original_coords.extend(original_coords)
+                text_variants = [text]
+                if i + 1 < len(ocr_results):
+                    next_text = str(ocr_results[i + 1][1]).strip()
+                    if re.fullmatch(r"[+\-]?\d{1,2}", str(text).strip()) and re.match(
+                        r"\d{4,10}", next_text
+                    ):
+                        merged_text = f"{str(text).strip()}{next_text}"
+                        text_variants.append(merged_text)
+                        logger.debug(
+                            f"СКЛЕЙКА БЛОКОВ: '{text}' + '{next_text}' -> '{merged_text}'"
+                        )
 
-                # УЛУЧШЕННЫЙ МЕТОД
-                improved_coords = debug_extractor.extract_coordinates_improved(
-                    text, coord_status
-                )
+                original_coords = []
+                improved_coords = []
+                for text_variant in text_variants:
+                    # ОРИГИНАЛЬНЫЙ МЕТОД
+                    original_variant = debug_extractor.extract_coordinates_original(
+                        text_variant, coord_status
+                    )
+                    original_coords.extend(original_variant)
+
+                    # УЛУЧШЕННЫЙ МЕТОД
+                    improved_variant = debug_extractor.extract_coordinates_improved(
+                        text_variant, coord_status
+                    )
+                    improved_coords.extend(improved_variant)
+
+                original_coords = list(dict.fromkeys(original_coords))
+                improved_coords = list(dict.fromkeys(improved_coords))
+                all_original_coords.extend(original_coords)
                 all_improved_coords.extend(improved_coords)
 
                 # Оригинальная логика обработки
@@ -361,8 +447,22 @@ async def process_img(
                     )
                     continue
 
-                if len(original_coords) == 1 and len(original_coords) != 2:
+                # Фолбэк: если оригинальный regex не нашел пару, используем расширенный.
+                if len(improved_coords) == 2:
+                    improved_coords[0] = improved_coords[0].replace(",", ".")
+                    improved_coords[1] = improved_coords[1].replace(",", ".")
+                    coordinates[img_link] = improved_coords
+                    logger.info(
+                        f"УЛУЧШЕННЫЙ МЕТОД НАШЕЛ 2 КООРДИНАТЫ: {improved_coords}"
+                    )
+                    continue
+
+                if len(original_coords) == 1:
                     two_cords.append(original_coords)
+                    continue
+
+                if len(improved_coords) == 1:
+                    two_cords.append(improved_coords)
                     continue
 
             # Сравниваем результаты
@@ -402,7 +502,7 @@ task_list = []
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
     """PaddleOCR PP-OCRv5 смотрит фотографию и ищет координаты на нём"""
 
-    semaphore = asyncio.Semaphore(3)
+    semaphore = asyncio.Semaphore(4)
     tasks = [
         asyncio.create_task(process_img(img_link, semaphore, coord_status))
         for img_link in img_urls
