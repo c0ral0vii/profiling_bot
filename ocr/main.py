@@ -161,6 +161,12 @@ def _extract_ocr_results(raw_result) -> List[tuple]:
     """Нормализация результатов OCR для PaddleOCR 2.x/3.x."""
     normalized = []
 
+    def first_not_none(*values):
+        for value in values:
+            if value is not None:
+                return value
+        return []
+
     if raw_result is None:
         return normalized
 
@@ -171,15 +177,15 @@ def _extract_ocr_results(raw_result) -> List[tuple]:
 
         # PaddleOCR 3.x (BaseResult, наследник dict)
         if isinstance(res, dict):
-            rec_texts = res.get("rec_texts") or []
-            rec_scores = res.get("rec_scores") or []
-            rec_boxes = res.get("rec_boxes") or res.get("rec_polys") or []
+            rec_texts = first_not_none(res.get("rec_texts"), [])
+            rec_scores = first_not_none(res.get("rec_scores"), [])
+            rec_boxes = first_not_none(res.get("rec_boxes"), res.get("rec_polys"), [])
 
         # Объектный формат (на случай отличий между версиями)
         elif hasattr(res, "rec_texts"):
-            rec_texts = getattr(res, "rec_texts", []) or []
-            rec_scores = getattr(res, "rec_scores", []) or []
-            rec_boxes = getattr(res, "rec_boxes", []) or []
+            rec_texts = first_not_none(getattr(res, "rec_texts", None), [])
+            rec_scores = first_not_none(getattr(res, "rec_scores", None), [])
+            rec_boxes = first_not_none(getattr(res, "rec_boxes", None), [])
 
         # Legacy-формат PaddleOCR 2.x: [[box, (text, score)], ...]
         elif isinstance(res, list):
