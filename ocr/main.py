@@ -471,7 +471,11 @@ async def process_img(
             logger.info(f"Улучшенный метод: {all_improved_coords}")
             logger.info(f"Two_cords: {two_cords}")
 
-            # Оригинальная логика возврата
+            if coordinates:
+                logger.info(f"ВОЗВРАЩАЕМ КООРДИНАТЫ: {coordinates[img_link]}")
+                return coordinates
+
+            # Оригинальная логика возврата (фолбэк, если полная пара не была найдена)
             if len(two_cords) == 2:
                 ready_coords = []
                 for cord_pair in two_cords:
@@ -480,10 +484,6 @@ async def process_img(
                 if len(ready_coords) == 2:
                     logger.info(f"ВОЗВРАЩАЕМ КООРДИНАТЫ ИЗ TWO_CORDS: {ready_coords}")
                     return {img_link: ready_coords}
-
-            if coordinates:
-                logger.info(f"ВОЗВРАЩАЕМ КООРДИНАТЫ: {coordinates[img_link]}")
-                return coordinates
 
             logger.info("КООРДИНАТЫ НЕ НАЙДЕНЫ")
             return None
