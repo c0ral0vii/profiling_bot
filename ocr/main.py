@@ -157,6 +157,79 @@ class DebugCoordinateExtractor:
 debug_extractor = DebugCoordinateExtractor()
 
 
+def _extract_ocr_results(raw_result) -> List[tuple]:
+    """Нормализация результатов OCR для PaddleOCR 2.x/3.x."""
+    normalized = []
+
+    if raw_result is None:
+        return normalized
+
+    for res in raw_result:
+        rec_texts = None
+        rec_scores = None
+        rec_boxes = None
+
+        # PaddleOCR 3.x (BaseResult, наследник dict)
+        if isinstance(res, dict):
+            rec_texts = res.get("rec_texts") or []
+            rec_scores = res.get("rec_scores") or []
+            rec_boxes = res.get("rec_boxes") or res.get("rec_polys") or []
+
+        # Объектный формат (на случай отличий между версиями)
+        elif hasattr(res, "rec_texts"):
+            rec_texts = getattr(res, "rec_texts", []) or []
+            rec_scores = getattr(res, "rec_scores", []) or []
+            rec_boxes = getattr(res, "rec_boxes", []) or []
+
+        # Legacy-формат PaddleOCR 2.x: [[box, (text, score)], ...]
+        elif isinstance(res, list):
+            for item in res:
+                if not isinstance(item, (list, tuple)) or len(item) < 2:
+                    continue
+                bbox = item[0]
+                value = item[1]
+                if isinstance(value, (list, tuple)) and len(value) >= 2:
+                    text = str(value[0])
+                    score = float(value[1])
+                else:
+                    text = str(value)
+                    score = 0.0
+                normalized.append((bbox, text, score))
+            continue
+
+        else:
+            continue
+
+        for i, text in enumerate(rec_texts):
+            score = float(rec_scores[i]) if i < len(rec_scores) else 0.0
+            bbox = rec_boxes[i] if i < len(rec_boxes) else None
+            normalized.append((bbox, str(text), score))
+
+    return normalized
+
+
+def _describe_ocr_raw_result(raw_result) -> str:
+    """Короткая диагностика формата сырых OCR результатов."""
+    if raw_result is None:
+        return "raw_result=None"
+
+    try:
+        total = len(raw_result)
+    except TypeError:
+        return f"raw_result_type={type(raw_result).__name__}"
+
+    if total == 0:
+        return "raw_result=[]"
+
+    first = raw_result[0]
+    if isinstance(first, dict):
+        keys = list(first.keys())
+        rec_count = len(first.get("rec_texts") or [])
+        return f"items={total}, first_type=dict, keys={keys}, rec_texts={rec_count}"
+
+    return f"items={total}, first_type={type(first).__name__}"
+
+
 async def process_img(
     img_link: str,
     semaphore: asyncio.Semaphore,
@@ -183,31 +256,58 @@ async def process_img(
             img = Image.open(BytesIO(img_data))
             img_processed = debug_extractor.enhance_image_quality(img)
 
-            # Распознавание текста через PaddleOCR PP-OCRv5
-            # Используем predict() согласно официальной документации
-            result = ocr.predict(img_processed)
+            # Распознавание текста через PaddleOCR PP-OCRv5.
+            # Для скриншотов с мелким текстом делаем более чувствительный проход.
+            result = ocr.predict(
+                img_processed,
+                text_det_limit_side_len=1536,
+                text_det_limit_type="max",
+                text_det_thresh=0.2,
+                text_det_box_thresh=0.3,
+                text_rec_score_thresh=0.0,
+            )
+            ocr_results = _extract_ocr_results(result)
+            if not ocr_results:
+                logger.debug(f"OCR проход #1 пустой: {_describe_ocr_raw_result(result)}")
 
-            # Обработка результата PaddleOCR
-            # result - это итератор объектов результата
-            ocr_results = []
-            for res in result:
-                # Извлекаем данные из результата
-                # res.rec_texts - список распознанных текстов
-                # res.rec_scores - массив уверенностей распознавания
-                # res.rec_boxes - координаты рамок
-                if hasattr(res, "rec_texts") and res.rec_texts:
-                    for i, text in enumerate(res.rec_texts):
-                        confidence = (
-                            float(res.rec_scores[i])
-                            if hasattr(res, "rec_scores") and i < len(res.rec_scores)
-                            else 0.0
-                        )
-                        bbox = (
-                            res.rec_boxes[i]
-                            if hasattr(res, "rec_boxes") and i < len(res.rec_boxes)
-                            else None
-                        )
-                        ocr_results.append((bbox, text, confidence))
+            if not ocr_results:
+                # Повторный проход на увеличенном изображении для мелкого текста.
+                h, w = img_processed.shape[:2]
+                upscaled = np.array(
+                    Image.fromarray(img_processed).resize(
+                        (w * 2, h * 2), Image.Resampling.LANCZOS
+                    )
+                )
+                result = ocr.predict(
+                    upscaled,
+                    text_det_limit_side_len=2048,
+                    text_det_limit_type="max",
+                    text_det_thresh=0.2,
+                    text_det_box_thresh=0.3,
+                    text_rec_score_thresh=0.0,
+                )
+                ocr_results = _extract_ocr_results(result)
+                if not ocr_results:
+                    logger.debug(
+                        f"OCR проход #2 (upscale) пустой: {_describe_ocr_raw_result(result)}"
+                    )
+
+            if not ocr_results:
+                # Фолбэк: пробуем оригинал без усиления, если препроцессинг "пережал" картинку.
+                original_rgb = np.array(img.convert("RGB"))
+                result = ocr.predict(
+                    original_rgb,
+                    text_det_limit_side_len=1536,
+                    text_det_limit_type="max",
+                    text_det_thresh=0.2,
+                    text_det_box_thresh=0.3,
+                    text_rec_score_thresh=0.0,
+                )
+                ocr_results = _extract_ocr_results(result)
+                if not ocr_results:
+                    logger.debug(
+                        f"OCR проход #3 (original) пустой: {_describe_ocr_raw_result(result)}"
+                    )
 
             logger.info(f"Распознано текстовых блоков: {len(ocr_results)}")
 
