@@ -46,6 +46,7 @@ async def create_html(coords: dict, user: int):
             cursor: pointer;
             font-size: 14px;
             font-weight: bold;
+            display: none;
         }
         .filter-button:hover {
             background: #f0f0f0;
