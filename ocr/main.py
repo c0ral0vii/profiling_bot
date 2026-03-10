@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import re
 import ssl
 from io import BytesIO
@@ -7,8 +8,17 @@ from typing import List
 
 import aiohttp
 import numpy as np
-from paddleocr import PaddleOCR
 from PIL import Image, ImageEnhance
+
+# Настройки должны быть выставлены до импорта PaddleOCR/PaddleX.
+os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
+os.environ.setdefault(
+    "PADDLE_PDX_CACHE_HOME",
+    os.path.join(os.getcwd(), ".paddlex-cache"),
+)
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
+
+from paddleocr import PaddleOCR
 
 # Детальное логирование
 logging.basicConfig(
@@ -23,15 +33,28 @@ ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
 # Инициализация PaddleOCR PP-OCRv5 (глобальный экземпляр)
-# Используем правильный API согласно документации
-ocr = PaddleOCR(
-    text_detection_model_name="PP-OCRv5_mobile_det",
-    text_recognition_model_name="PP-OCRv5_mobile_rec",
-    use_doc_orientation_classify=False,
-    use_doc_unwarping=False,
-    use_textline_orientation=False,
-    text_rec_score_thresh=0.0,
-)
+# По умолчанию в PaddleOCR 3.x включен MKLDNN, что на некоторых сборках
+# приводит к падению вида ConvertPirAttribute2RuntimeAttribute/oneDNN.
+ocr_kwargs = {
+    "text_detection_model_name": "PP-OCRv5_mobile_det",
+    "text_recognition_model_name": "PP-OCRv5_mobile_rec",
+    "use_doc_orientation_classify": False,
+    "use_doc_unwarping": False,
+    "use_textline_orientation": False,
+    "text_rec_score_thresh": 0.0,
+}
+safe_runtime_kwargs = {
+    "device": "cpu",
+    "enable_hpi": False,
+    "enable_mkldnn": False,
+    "enable_cinn": False,
+}
+
+try:
+    ocr = PaddleOCR(**ocr_kwargs, **safe_runtime_kwargs)
+except TypeError:
+    # Совместимость со старыми версиями, где runtime-флаги отсутствуют.
+    ocr = PaddleOCR(**ocr_kwargs)
 
 pool_instance = None
 
