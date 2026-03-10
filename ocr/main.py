@@ -274,7 +274,9 @@ async def process_img(
             )
             ocr_results = _extract_ocr_results(result)
             if not ocr_results:
-                logger.debug(f"OCR проход #1 пустой: {_describe_ocr_raw_result(result)}")
+                logger.debug(
+                    f"OCR проход #1 пустой: {_describe_ocr_raw_result(result)}"
+                )
 
             if not ocr_results:
                 # Повторный проход на увеличенном изображении для мелкого текста.
@@ -391,7 +393,7 @@ task_list = []
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
     """PaddleOCR PP-OCRv5 смотрит фотографию и ищет координаты на нём"""
 
-    semaphore = asyncio.Semaphore(4)
+    semaphore = asyncio.Semaphore(3)
     tasks = [
         asyncio.create_task(process_img(img_link, semaphore, coord_status))
         for img_link in img_urls
