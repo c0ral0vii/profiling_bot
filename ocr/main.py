@@ -33,7 +33,6 @@ ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
 # Инициализация PaddleOCR PP-OCRv5 (глобальный экземпляр)
-# По умолчанию в PaddleOCR 3.x включен MKLDNN, что на некоторых сборках
 # приводит к падению вида ConvertPirAttribute2RuntimeAttribute/oneDNN.
 ocr_kwargs = {
     "text_detection_model_name": "PP-OCRv5_mobile_det",
@@ -76,6 +75,11 @@ class DebugCoordinateExtractor:
             r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # IP-адреса
         ]
 
+    def normalize_text_for_coords(self, text: str) -> str:
+        """Нормализация OCR-артефактов в числах координат."""
+        # OCR часто путает десятичную точку с ':' или ';' (например 55:814349).
+        return re.sub(r"(?<=\d)[:;](?=\d)", ".", text)
+
     def enhance_image_quality(self, img: Image.Image) -> np.ndarray:
         """Улучшение качества изображения для лучшего распознавания"""
         try:
@@ -101,9 +105,10 @@ class DebugCoordinateExtractor:
     ) -> List[str]:
         """Оригинальный метод извлечения координат"""
         pattern = self.original_patterns[coord_status]
-        coords = re.findall(pattern, text)
+        normalized_text = self.normalize_text_for_coords(text)
+        coords = re.findall(pattern, normalized_text)
         logger.debug(
-            f"ОРИГИНАЛЬНЫЙ МЕТОД: текст='{text}', паттерн='{pattern}', найдено={coords}"
+            f"ОРИГИНАЛЬНЫЙ МЕТОД: текст='{text}', normalized='{normalized_text}', паттерн='{pattern}', найдено={coords}"
         )
         return coords
 
@@ -111,6 +116,8 @@ class DebugCoordinateExtractor:
         self, text: str, coord_status: bool = False
     ) -> List[str]:
         """Улучшенный метод извлечения координат"""
+        normalized_text = self.normalize_text_for_coords(text)
+
         if coord_status:
             patterns = [
                 r"[1-9]+[.,]\d{4,8}",  # Оригинальный + расширенный
@@ -122,19 +129,21 @@ class DebugCoordinateExtractor:
 
         all_coords = []
         for pattern in patterns:
-            matches = re.finditer(pattern, text)
+            matches = re.finditer(pattern, normalized_text)
             for match in matches:
                 coord = match.group()
                 coord = coord.replace(",", ".")
 
                 # Пропускаем явные ложные срабатывания
-                if self.is_false_positive(text, coord):
+                if self.is_false_positive(normalized_text, coord):
                     logger.debug(f"Ложное срабатывание: '{coord}' в тексте '{text}'")
                     continue
 
                 all_coords.append(coord)
 
-        logger.debug(f"УЛУЧШЕННЫЙ МЕТОД: текст='{text}', найдено={all_coords}")
+        logger.debug(
+            f"УЛУЧШЕННЫЙ МЕТОД: текст='{text}', normalized='{normalized_text}', найдено={all_coords}"
+        )
         return all_coords
 
     def is_false_positive(self, text: str, coord: str) -> bool:
