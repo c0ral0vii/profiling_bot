@@ -53,7 +53,7 @@ class DebugCoordinateExtractor:
             r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # IP-адреса
         ]
 
-    def enhance_image_quality(self, img: Image.Image) -> np.ndarray:
+    def enhance_image_quality(self, img: Image.Image) -> Image.Image:
         """Улучшение качества изображения для лучшего распознавания"""
         try:
             # Увеличение резкости
@@ -64,14 +64,13 @@ class DebugCoordinateExtractor:
             enhancer = ImageEnhance.Contrast(img)
             img = enhancer.enhance(1.5)
 
-            # Конвертация в grayscale
-            img = img.convert("L")
-            img_array = np.array(img)
+            # Конвертация в RGB (PaddleOCR требует 3 канала)
+            img = img.convert("RGB")
 
-            return img_array
+            return img
         except Exception as e:
             logger.warning(f"Ошибка улучшения изображения: {e}")
-            return np.array(img.convert("L"))
+            return img.convert("RGB")
 
     def extract_coordinates_original(
         self, text: str, coord_status: bool = False
