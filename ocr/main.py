@@ -47,7 +47,7 @@ safe_runtime_kwargs = {
     "enable_hpi": False,
     "enable_mkldnn": False,
     "enable_cinn": False,
-    "cpu_threads": 2,
+    "cpu_threads": 4,
 }
 
 try:
@@ -180,7 +180,7 @@ class DebugCoordinateExtractor:
                 r"[1-9]\d[.,]\d{4,8}",  # Оригинальный + расширенный
             ]
 
-        all_coords = []
+        ordered_candidates = []
         for pattern in patterns:
             matches = re.finditer(pattern, normalized_text)
             for match in matches:
@@ -192,20 +192,34 @@ class DebugCoordinateExtractor:
                     logger.debug(f"Ложное срабатывание: '{coord}' в тексте '{text}'")
                     continue
 
-                all_coords.append(coord)
+                ordered_candidates.append((match.start(), coord))
 
         # Фолбэк для случаев, где OCR "съел" десятичную точку в одной из координат.
-        compact_tokens = re.findall(r"[+\-]?\d{7,10}", normalized_text)
-        for token in compact_tokens:
+        compact_matches = re.finditer(r"[+\-]?\d{7,10}", normalized_text)
+        for match in compact_matches:
+            token = match.group()
             repaired = self._repair_compact_coordinate_token(token, coord_status)
             if not repaired:
                 continue
             if self.is_false_positive(normalized_text, repaired):
                 continue
-            all_coords.append(repaired)
+            ordered_candidates.append((match.start(), repaired))
 
-        # Дедупликация с сохранением порядка.
-        all_coords = list(dict.fromkeys(all_coords))
+        # Сохраняем естественный порядок координат в исходной строке.
+        ordered_candidates.sort(key=lambda item: item[0])
+
+        all_coords = []
+        seen = set()
+        for _, coord in ordered_candidates:
+            if coord in seen:
+                continue
+            seen.add(coord)
+            all_coords.append(coord)
+
+        # На некоторых OCR-шумах из одного фрагмента может получиться >2 кандидатов.
+        # Берем первые по позиции в исходной строке.
+        if len(all_coords) > 2:
+            all_coords = all_coords[:2]
 
         logger.debug(
             f"УЛУЧШЕННЫЙ МЕТОД: текст='{text}', normalized='{normalized_text}', найдено={all_coords}"
@@ -502,7 +516,7 @@ task_list = []
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
     """PaddleOCR PP-OCRv5 смотрит фотографию и ищет координаты на нём"""
 
-    semaphore = asyncio.Semaphore(4)
+    semaphore = asyncio.Semaphore(2)
     tasks = [
         asyncio.create_task(process_img(img_link, semaphore, coord_status))
         for img_link in img_urls
