@@ -47,7 +47,7 @@ safe_runtime_kwargs = {
     "enable_hpi": False,
     "enable_mkldnn": False,
     "enable_cinn": False,
-    "cpu_threads": 4,
+    "cpu_threads": 6,
 }
 
 try:
@@ -516,7 +516,7 @@ task_list = []
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
     """PaddleOCR PP-OCRv5 смотрит фотографию и ищет координаты на нём"""
 
-    semaphore = asyncio.Semaphore(2)
+    semaphore = asyncio.Semaphore(4)
     tasks = [
         asyncio.create_task(process_img(img_link, semaphore, coord_status))
         for img_link in img_urls
