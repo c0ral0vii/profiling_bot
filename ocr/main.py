@@ -2,12 +2,12 @@ import asyncio
 import re
 import ssl
 from io import BytesIO
-from typing import List, Dict, Union, Tuple, Optional
+from typing import List
 import aiohttp
 import numpy as np
-from easyocr import Reader
 from PIL import Image, ImageEnhance, ImageFilter
 import logging
+from paddleocr import PaddleOCR
 
 # Детальное логирование
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,8 +19,18 @@ ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
+# Инициализация PaddleOCR PP-OCRv5 (глобальный экземпляр)
+ocr = PaddleOCR(
+    use_angle_cls=True,
+    lang='en',
+    use_gpu=False,
+    show_log=False,
+    det_model_name='PP-OCRv5',
+    rec_model_name='PP-OCRv5'
+)
+
 pool_instance = None
-reader = Reader(["en"], gpu=False)
+
 
 class DebugCoordinateExtractor:
     def __init__(self):
@@ -28,7 +38,7 @@ class DebugCoordinateExtractor:
             False: r"([1-9]\d[.,]\d{4,6})",  # Оригинальный паттерн для coord_status=False
             True: r"([1-9]+[.,]\d{4,6})"     # Оригинальный паттерн для coord_status=True
         }
-        
+
         # Черный список для фильтрации ложных срабатываний
         self.blacklist_patterns = [
             r'\d{1,2}[./-]\d{1,2}[./-]\d{2,4}',  # Даты
@@ -45,15 +55,15 @@ class DebugCoordinateExtractor:
             # Увеличение резкости
             enhancer = ImageEnhance.Sharpness(img)
             img = enhancer.enhance(2.0)
-            
+
             # Увеличение контраста
             enhancer = ImageEnhance.Contrast(img)
             img = enhancer.enhance(1.5)
-            
+
             # Конвертация в grayscale
             img = img.convert("L")
             img_array = np.array(img)
-            
+
             return img_array
         except Exception as e:
             logger.warning(f"Ошибка улучшения изображения: {e}")
@@ -76,52 +86,53 @@ class DebugCoordinateExtractor:
             patterns = [
                 r'[1-9]\d[.,]\d{4,8}',  # Оригинальный + расширенный
             ]
-        
+
         all_coords = []
         for pattern in patterns:
             matches = re.finditer(pattern, text)
             for match in matches:
                 coord = match.group()
                 coord = coord.replace(',', '.')
-                
+
                 # Пропускаем явные ложные срабатывания
                 if self.is_false_positive(text, coord):
                     logger.debug(f"Ложное срабатывание: '{coord}' в тексте '{text}'")
                     continue
-                    
+
                 all_coords.append(coord)
-        
+
         logger.debug(f"УЛУЧШЕННЫЙ МЕТОД: текст='{text}', найдено={all_coords}")
         return all_coords
 
     def is_false_positive(self, text: str, coord: str) -> bool:
         """Проверка на ложное срабатывание"""
         text_lower = text.lower()
-        
+
         # Проверка по черному списку паттернов
         for pattern in self.blacklist_patterns:
             if re.search(pattern, text_lower):
                 return True
-        
+
         # Специфичные проверки для координат
         if re.match(r'^\d{1,2}\.\d{1,2}$', coord):  # 10.24 - вероятно не координата
             return True
-            
+
         return False
+
 
 # Глобальный экземпляр экстрактора
 debug_extractor = DebugCoordinateExtractor()
 
+
 async def process_img(
     img_link: str,
-    reader: Reader,
     semaphore: asyncio.Semaphore,
     coord_status: bool = False,
 ) -> dict | str | None:
     async with semaphore:
         try:
             logger.info(f"=== ОБРАБОТКА ИЗОБРАЖЕНИЯ: {img_link} ===")
-            
+
             if "%IMAGE_EXT%" in img_link:
                 img_link = img_link.replace("%IMAGE_EXT%", "jpg")
 
@@ -137,29 +148,40 @@ async def process_img(
             img = Image.open(BytesIO(img_data))
             img_processed = debug_extractor.enhance_image_quality(img)
 
-            # Распознавание текста
-            result = reader.readtext(img_processed)
-            logger.info(f"Распознано текстовых блоков: {len(result)}")
+            # Распознавание текста через PaddleOCR PP-OCRv5
+            # PaddleOCR возвращает: [[[[x1,y1],[x2,y2],[x3,y3],[x4,y4]], (text, confidence)], ...]
+            result = ocr.ocr(img_processed, cls=True)
+            
+            # Обработка результата PaddleOCR
+            ocr_results = []
+            if result and result[0]:
+                for line in result[0]:
+                    bbox = line[0]  # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+                    text = line[1][0]  # распознанный текст
+                    confidence = line[1][1]  # уверенность
+                    ocr_results.append((bbox, text, confidence))
+            
+            logger.info(f"Распознано текстовых блоков: {len(ocr_results)}")
 
             two_cords = []
             coordinates = {}
-            
+
             # ТЕСТ: сравниваем оба метода
             all_original_coords = []
             all_improved_coords = []
-            
-            for i, line in enumerate(result):
+
+            for i, line in enumerate(ocr_results):
                 bbox, text, confidence = line
                 logger.info(f"Блок {i}: '{text}' (уверенность: {confidence:.2f})")
-                
+
                 # ОРИГИНАЛЬНЫЙ МЕТОД
                 original_coords = debug_extractor.extract_coordinates_original(text, coord_status)
                 all_original_coords.extend(original_coords)
-                
-                # УЛУЧШЕННЫЙ МЕТОД  
+
+                # УЛУЧШЕННЫЙ МЕТОД
                 improved_coords = debug_extractor.extract_coordinates_improved(text, coord_status)
                 all_improved_coords.extend(improved_coords)
-                
+
                 # Оригинальная логика обработки
                 if len(original_coords) == 2:
                     original_coords[0] = original_coords[0].replace(",", ".")
@@ -177,7 +199,7 @@ async def process_img(
             logger.info(f"Оригинальный метод: {all_original_coords}")
             logger.info(f"Улучшенный метод: {all_improved_coords}")
             logger.info(f"Two_cords: {two_cords}")
-            
+
             # Оригинальная логика возврата
             if len(two_cords) == 2:
                 ready_coords = []
@@ -194,7 +216,7 @@ async def process_img(
 
             logger.info("КООРДИНАТЫ НЕ НАЙДЕНЫ")
             return None
-                
+
         except asyncio.TimeoutError:
             logger.error(f"Таймаут при обработке {img_link}")
             return f"Таймаут - {img_link}"
@@ -207,11 +229,11 @@ task_list = []
 
 
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
-    """EasyOCR смотрит фотографию и ищет координаты на нём"""
+    """PaddleOCR PP-OCRv5 смотрит фотографию и ищет координаты на нём"""
 
     semaphore = asyncio.Semaphore(4)
     tasks = [
-        asyncio.create_task(process_img(img_link, reader, semaphore, coord_status))
+        asyncio.create_task(process_img(img_link, semaphore, coord_status))
         for img_link in img_urls
     ]
 
