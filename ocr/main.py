@@ -100,15 +100,6 @@ class DebugCoordinateExtractor:
         if len(digits) < 7:
             return None
 
-        # Частая ошибка OCR: лишняя первая цифра перед широтой (455767579 -> 55.767579).
-        if len(digits) >= 9 and digits[0] in {"3", "4"}:
-            try:
-                repaired_head = int(digits[1:3])
-                if 50 <= repaired_head <= 89:
-                    digits = digits[1:]
-            except ValueError:
-                pass
-
         preferred_degree_len = 1 if coord_status else 2
         for degree_len in (preferred_degree_len, 2, 3):
             if len(digits) - degree_len < 4:
@@ -510,7 +501,7 @@ async def process_img(
             return f"Ошибка обработки - {img_link}: {str(e)}"
 
 
-task_list = []
+task_list = set()
 
 
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
@@ -523,8 +514,13 @@ async def check_img(img_urls: list, coord_status: bool = False) -> list:
     ]
 
     for task in tasks:
-        task_list.append(task)
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+        task_list.add(task)
+
+    try:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+    finally:
+        for task in tasks:
+            task_list.discard(task)
 
     coordinates = {}
     stats = {"total": len(img_urls), "success": 0, "errors": 0, "with_coords": 0}
@@ -555,9 +551,13 @@ async def check_img(img_urls: list, coord_status: bool = False) -> list:
 
 async def stop() -> str:
     """Остановка обработки фотографий"""
-    if len(task_list) > 0:
-        for task in task_list:
+    active_tasks = {task for task in task_list if not task.done()}
+
+    if active_tasks:
+        for task in active_tasks:
             task.cancel()
+        for task in active_tasks:
+            task_list.discard(task)
         return "Остановлено"
-    else:
-        return "Никаких задач сейчас нет"
+
+    return "Никаких задач сейчас нет"

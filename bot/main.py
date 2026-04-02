@@ -1,4 +1,7 @@
+import asyncio
 import re
+from collections import deque
+from dataclasses import dataclass
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart, StateFilter
@@ -12,9 +15,22 @@ from kb.main_menu import main_menu_keyboard
 from map.files import create_new_user
 from map.main import create_html
 from map.parsing import get_imgs
-from ocr.main import check_img, stop
+from ocr.main import check_img
 
 dp = Dispatcher()
+
+
+@dataclass(slots=True)
+class UserTask:
+    message: Message
+    user_id: int
+    url: str
+    coord_status: bool
+
+
+user_queues: dict[int, deque[UserTask]] = {}
+user_workers: dict[int, asyncio.Task] = {}
+user_queue_lock = asyncio.Lock()
 
 
 @dp.message(CommandStart(), StateFilter(None))
@@ -63,7 +79,7 @@ async def stop_func(message: Message, state: FSMContext):
     """Стоп функция"""
 
     try:
-        result = await stop()
+        result = await stop_user_tasks(message.from_user.id)
         await message.answer(result)
     except Exception as e:
         await message.answer(f"Ошибка - {e}")
@@ -100,50 +116,138 @@ async def get_filesharing(message: Message, state: FSMContext):
 
 
 async def check_function(message: Message, state: FSMContext):
-    """Проверка и обработка изображений"""
-    try:
+    """Ставит ссылку пользователя в очередь на обработку"""
+    data = await state.get_data()
+    if not data.get("coord_status"):
+        await state.update_data(coord_status=False)
         data = await state.get_data()
-        if not data.get("coord_status"):
-            await state.update_data(coord_status=False)
-            data = await state.get_data()
 
-        user_id = message.from_user.id
-        msg = await message.reply("Получаем изображения с файлообменника...")
+    queued_before = await enqueue_user_task(
+        message=message,
+        coord_status=data.get("coord_status", False),
+    )
 
-        img_urls = await get_imgs(url=message.text, user=user_id)
+    if queued_before > 0:
+        await message.reply(
+            f"Ссылка поставлена в очередь. Перед вами задач: {queued_before}."
+        )
+
+
+async def enqueue_user_task(message: Message, coord_status: bool) -> int:
+    """Добавляет задачу пользователя в очередь и запускает воркер при необходимости."""
+    user_id = message.from_user.id
+    task = UserTask(
+        message=message,
+        user_id=user_id,
+        url=message.text,
+        coord_status=coord_status,
+    )
+
+    async with user_queue_lock:
+        queue = user_queues.setdefault(user_id, deque())
+        worker = user_workers.get(user_id)
+        worker_running = worker is not None and not worker.done()
+
+        queue.append(task)
+        queued_before = len(queue) if worker_running else len(queue) - 1
+
+        if not worker_running:
+            user_workers[user_id] = asyncio.create_task(process_user_queue(user_id))
+
+    return queued_before
+
+
+async def process_user_queue(user_id: int):
+    """Последовательно обрабатывает ссылки одного пользователя."""
+    try:
+        while True:
+            async with user_queue_lock:
+                queue = user_queues.get(user_id)
+                if not queue:
+                    user_queues.pop(user_id, None)
+                    return
+
+                task = queue.popleft()
+
+            await process_user_task(task)
+    except asyncio.CancelledError:
+        async with user_queue_lock:
+            user_queues.pop(user_id, None)
+        raise
+    finally:
+        async with user_queue_lock:
+            worker = user_workers.get(user_id)
+            if worker is asyncio.current_task():
+                user_workers.pop(user_id, None)
+
+
+async def process_user_task(task: UserTask):
+    """Проверка и обработка одной ссылки пользователя."""
+    msg = await task.message.reply("Получаем изображения с файлообменника...")
+
+    try:
+        img_urls = await get_imgs(url=task.url, user=task.user_id)
         await msg.edit_text(" ✅Изображения получены, получаем координаты...")
 
         result = await check_img(
-            img_urls=img_urls, coord_status=data.get("coord_status")
+            img_urls=img_urls, coord_status=task.coord_status
         )
         await msg.edit_text(" ✅Координаты получены, создаём карту...")
 
-        await create_html(coords=result[0], user=user_id)
-        await msg.delete()
+        await create_html(coords=result[0], user=task.user_id)
+        await safe_delete_message(msg)
 
-        # Отправляем карту
-        await message.reply_document(
-            FSInputFile(path=f"map/generate_map/{str(user_id)}/leaflet.html"),
+        await task.message.reply_document(
+            FSInputFile(path=f"map/generate_map/{str(task.user_id)}/leaflet.html"),
             caption=f"Готово ✅, {result[-1]}",
         )
 
-        # Отправляем необработанные изображения ссылками
         processed_coords = result[0]
         processed_urls = set(processed_coords.keys())
         unprocessed_urls = [url for url in img_urls if url not in processed_urls]
 
         if unprocessed_urls:
-            # Формируем сообщение со ссылками на необработанные изображения
             links_message = "📸 Необработанные изображения:\n"
             for i, url in enumerate(unprocessed_urls, 1):
                 links_message += f"{i}. {url}\n"
 
-            # Разбиваем на сообщения по 4000 символов
-            await send_long_message(links_message, message)
+            await send_long_message(links_message, task.message)
 
+    except asyncio.CancelledError:
+        await safe_delete_message(msg)
+        raise
     except Exception as e:
-        await msg.delete()
-        await message.answer(f"Произошла ошибка при обработке, повторите попытку ({e})")
+        await safe_delete_message(msg)
+        await task.message.answer(
+            f"Произошла ошибка при обработке, повторите попытку ({e})"
+        )
+
+
+async def stop_user_tasks(user_id: int) -> str:
+    """Останавливает текущую обработку и очищает очередь пользователя."""
+    async with user_queue_lock:
+        queue = user_queues.pop(user_id, deque())
+        worker = user_workers.pop(user_id, None)
+
+    queued_count = len(queue)
+    is_running = worker is not None and not worker.done()
+
+    if is_running:
+        worker.cancel()
+
+    if not is_running and queued_count == 0:
+        return "Никаких задач сейчас нет"
+
+    stopped_total = queued_count + int(is_running)
+    return f"Остановлено задач: {stopped_total}"
+
+
+async def safe_delete_message(message: Message):
+    """Безопасное удаление служебного сообщения."""
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
 
 async def send_long_message(text: str, message: Message, max_length: int = 4000):
