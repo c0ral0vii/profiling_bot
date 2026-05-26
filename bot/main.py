@@ -2,6 +2,7 @@ import asyncio
 import base64
 import logging
 import re
+import shutil
 import zipfile
 from collections import deque
 from dataclasses import dataclass
@@ -42,7 +43,7 @@ user_queues: dict[int, deque[UserTask]] = {}
 user_workers: dict[int, asyncio.Task] = {}
 user_queue_lock = asyncio.Lock()
 
-FILES_FM_DOWNLOAD_URL = "http://fv5-3.failiem.lv/server_scripts/zip/zip_streamer/upload_zip_streamer.php"
+FILES_FM_DOWNLOAD_URL = "https://fv5-3.failiem.lv/server_scripts/zip/zip_streamer/upload_zip_streamer.php"
 FILES_FM_DOMAINS = {"files.fm", "ru.files.fm", "ru.files.me", "files.me"}
 SUPPORTED_IMAGE_EXTENSIONS = {
     ".jpg",
@@ -277,6 +278,8 @@ async def process_user_task(task: UserTask):
         await task.message.answer(
             f"Произошла ошибка при обработке, повторите попытку ({e})"
         )
+    finally:
+        await asyncio.to_thread(cleanup_user_temp_dir, task.user_id)
 
 
 async def stop_user_tasks(user_id: int) -> str:
@@ -440,9 +443,26 @@ async def extract_images_from_zip(
 
 
 def unzip_archive(zip_path: Path, extract_dir: Path):
-    """Распаковка архива в отдельный поток."""
+    """Распаковка архива с защитой от Zip Slip."""
+    extract_root = extract_dir.resolve()
     with zipfile.ZipFile(zip_path, "r") as archive:
-        archive.extractall(extract_dir)
+        for member in archive.infolist():
+            target_path = (extract_root / member.filename).resolve()
+            if not target_path.is_relative_to(extract_root):
+                raise ValueError(
+                    f"Небезопасный путь в архиве: {member.filename}"
+                )
+            archive.extract(member, path=extract_root)
+
+
+def cleanup_user_temp_dir(user_id: int):
+    """Удаляет временные файлы пользователя после обработки."""
+    temp_dir = MAP_ROOT_PATH / str(user_id) / "temp"
+    if not temp_dir.exists():
+        return
+
+    shutil.rmtree(temp_dir)
+    logger.info("Очищена temp директория user=%s path=%s", user_id, temp_dir)
 
 
 async def ensure_static_server():
