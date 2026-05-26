@@ -1,14 +1,17 @@
 import asyncio
+import base64
 import logging
 import re
 import zipfile
 from collections import deque
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
 import aiohttp
 from aiohttp import web
+from PIL import Image
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart, StateFilter
@@ -203,13 +206,17 @@ async def process_user_task(task: UserTask):
     msg = await task.message.reply("Получаем изображения с файлообменника...")
 
     try:
+        embedded_image_map: dict[str, str] = {}
         if is_files_fm_url(task.url):
             logger.info(
                 "Начата обработка files.fm ссылки user=%s url=%s",
                 task.user_id,
                 task.url,
             )
-            img_urls = await get_imgs_from_files_fm(url=task.url, user=task.user_id)
+            img_urls, embedded_image_map = await get_imgs_from_files_fm(
+                url=task.url,
+                user=task.user_id,
+            )
         else:
             img_urls = await get_imgs(url=task.url, user=task.user_id)
 
@@ -223,7 +230,17 @@ async def process_user_task(task: UserTask):
         )
         await msg.edit_text(" ✅Координаты получены, создаём карту...")
 
-        await create_html(coords=result[0], user=task.user_id)
+        processed_coords = result[0]
+        processed_urls = set(processed_coords.keys())
+        unprocessed_urls = [url for url in img_urls if url not in processed_urls]
+
+        if embedded_image_map:
+            processed_coords = {
+                embedded_image_map.get(url, url): coord
+                for url, coord in processed_coords.items()
+            }
+
+        await create_html(coords=processed_coords, user=task.user_id)
         await safe_delete_message(msg)
 
         await task.message.reply_document(
@@ -231,14 +248,11 @@ async def process_user_task(task: UserTask):
             caption=f"Готово ✅, {result[-1]}",
         )
 
-        processed_coords = result[0]
-        processed_urls = set(processed_coords.keys())
-        unprocessed_urls = [url for url in img_urls if url not in processed_urls]
-
         if unprocessed_urls:
             links_message = "📸 Необработанные изображения:\n"
             for i, url in enumerate(unprocessed_urls, 1):
-                links_message += f"{i}. {url}\n"
+                link_or_name = extract_filename_from_local_url(url)
+                links_message += f"{i}. {link_or_name}\n"
 
             await send_long_message(links_message, task.message)
 
@@ -430,7 +444,42 @@ def local_file_path_to_url(file_path: Path) -> str:
     return f"http://127.0.0.1:{STATIC_SERVER_PORT}/files/{quote(relative_path)}"
 
 
-async def get_imgs_from_files_fm(url: str, user: int) -> list[str]:
+def extract_filename_from_local_url(url: str) -> str:
+    """Возвращает имя файла из локального URL."""
+    path = urlparse(url).path
+    filename = Path(path).name
+    return filename or url
+
+
+def image_path_to_base64_data_url(
+    image_path: Path,
+    max_side: int = 1280,
+    jpeg_quality: int = 72,
+) -> str:
+    """Сжимает изображение и кодирует в base64 data URL."""
+    with Image.open(image_path) as img:
+        img = img.convert("RGB")
+        img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+
+        buffer = BytesIO()
+        img.save(buffer, format="JPEG", quality=jpeg_quality, optimize=True)
+        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
+
+
+async def build_embedded_image_map(
+    image_paths: list[Path],
+) -> dict[str, str]:
+    """Строит словарь local_url -> base64 data URL для карты."""
+    result: dict[str, str] = {}
+    for image_path in image_paths:
+        local_url = local_file_path_to_url(image_path)
+        data_url = await asyncio.to_thread(image_path_to_base64_data_url, image_path)
+        result[local_url] = data_url
+    return result
+
+
+async def get_imgs_from_files_fm(url: str, user: int) -> tuple[list[str], dict[str, str]]:
     """Получает изображения из files.fm через ZIP архив."""
     uhash = extract_files_fm_hash(url)
     if not uhash:
@@ -444,13 +493,14 @@ async def get_imgs_from_files_fm(url: str, user: int) -> list[str]:
 
     await ensure_static_server()
     result_urls = [local_file_path_to_url(path) for path in image_paths]
+    embedded_image_map = await build_embedded_image_map(image_paths)
     logger.info(
-        "Подготовлены ссылки для OCR user=%s uhash=%s count=%s",
+        "Подготовлены ссылки для OCR и base64 для карты user=%s uhash=%s count=%s",
         user,
         uhash,
         len(result_urls),
     )
-    return result_urls
+    return result_urls, embedded_image_map
 
 
 async def run_bot():
