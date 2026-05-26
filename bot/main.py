@@ -44,6 +44,7 @@ user_workers: dict[int, asyncio.Task] = {}
 user_queue_lock = asyncio.Lock()
 
 FILES_FM_DOWNLOAD_URL = "https://fv5-3.failiem.lv/server_scripts/zip/zip_streamer/upload_zip_streamer.php"
+FILES_FM_DOWNLOAD_TIMEOUT = 900
 FILES_FM_DOMAINS = {"files.fm", "ru.files.fm", "ru.files.me", "files.me"}
 SUPPORTED_IMAGE_EXTENSIONS = {
     ".jpg",
@@ -56,6 +57,8 @@ SUPPORTED_IMAGE_EXTENSIONS = {
 }
 STATIC_SERVER_PORT = 8765
 MAP_ROOT_PATH = Path("map/generate_map").resolve()
+MAP_MAX_SIZE_BYTES = 200 * 1024 * 1024
+MAP_HTML_OVERHEAD_BYTES = 512 * 1024
 
 static_server_runner: web.AppRunner | None = None
 
@@ -216,14 +219,14 @@ async def process_user_task(task: UserTask):
     msg = await task.message.reply("Получаем изображения с файлообменника...")
 
     try:
-        embedded_image_map: dict[str, str] = {}
+        local_url_to_path: dict[str, Path] = {}
         if is_files_fm_url(task.url):
             logger.info(
                 "Начата обработка files.fm ссылки user=%s url=%s",
                 task.user_id,
                 task.url,
             )
-            img_urls, embedded_image_map = await get_imgs_from_files_fm(
+            img_urls, local_url_to_path = await get_imgs_from_files_fm(
                 url=task.url,
                 user=task.user_id,
             )
@@ -233,7 +236,9 @@ async def process_user_task(task: UserTask):
         if not img_urls:
             raise ValueError("Не удалось получить изображения по ссылке")
 
-        await msg.edit_text(" ✅Изображения получены, получаем координаты...")
+        await msg.edit_text(
+            f" ✅Изображений: {len(img_urls)}, получаем координаты..."
+        )
 
         result = await check_img(
             img_urls=img_urls, coord_status=task.coord_status
@@ -245,21 +250,54 @@ async def process_user_task(task: UserTask):
         unprocessed_urls = [
             url for url in img_urls if url not in processed_urls
         ]
+        original_coords = dict(processed_coords)
 
-        if embedded_image_map:
-            processed_coords = {
-                embedded_image_map.get(url, url): coord
-                for url, coord in processed_coords.items()
-            }
+        if local_url_to_path:
+            coords_urls = list(original_coords.keys())
+            embedded_image_map = await build_embedded_image_map(
+                local_url_to_path=local_url_to_path,
+                urls_to_embed=coords_urls,
+            )
+            processed_coords = apply_embedded_images(
+                original_coords, embedded_image_map
+            )
 
         await create_html(coords=processed_coords, user=task.user_id)
+        map_path = Path(f"map/generate_map/{task.user_id}/leaflet.html")
+        if local_url_to_path and map_path.stat().st_size > MAP_MAX_SIZE_BYTES:
+            logger.warning(
+                "Карта %.1f MB > лимита, повторное сжатие user=%s",
+                map_path.stat().st_size / (1024 * 1024),
+                task.user_id,
+            )
+            tighter_budget = int(
+                (MAP_MAX_SIZE_BYTES - MAP_HTML_OVERHEAD_BYTES) * 0.75
+            )
+            embedded_image_map = await build_embedded_image_map(
+                local_url_to_path=local_url_to_path,
+                urls_to_embed=coords_urls,
+                image_budget=tighter_budget,
+            )
+            processed_coords = apply_embedded_images(
+                original_coords, embedded_image_map
+            )
+            await create_html(coords=processed_coords, user=task.user_id)
+
+        map_size_mb = map_path.stat().st_size / (1024 * 1024)
+        logger.info(
+            "Карта создана user=%s size_mb=%.2f",
+            task.user_id,
+            map_size_mb,
+        )
         await safe_delete_message(msg)
 
+        caption = f"Готово ✅, {result[-1]}"
+        if local_url_to_path and map_size_mb > 150:
+            caption += f" (карта {map_size_mb:.0f} MB)"
+
         await task.message.reply_document(
-            FSInputFile(
-                path=f"map/generate_map/{str(task.user_id)}/leaflet.html"
-            ),
-            caption=f"Готово ✅, {result[-1]}",
+            FSInputFile(path=str(map_path)),
+            caption=caption,
         )
 
         if unprocessed_urls:
@@ -374,37 +412,65 @@ async def download_files_fm_zip(
     user_temp_dir.mkdir(parents=True, exist_ok=True)
     zip_path = user_temp_dir / f"{uhash}.zip"
     params = {"uhash": uhash}
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Referer": f"https://ru.files.fm/u/{uhash}",
+    }
 
-    timeout = aiohttp.ClientTimeout(total=45)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    timeout = aiohttp.ClientTimeout(total=FILES_FM_DOWNLOAD_TIMEOUT)
+    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
         for attempt in range(1, retries + 1):
+            if zip_path.exists():
+                zip_path.unlink()
+
             async with session.get(
-                FILES_FM_DOWNLOAD_URL, params=params
+                FILES_FM_DOWNLOAD_URL,
+                params=params,
+                allow_redirects=False,
             ) as response:
-                content = await response.read()
                 content_type = response.headers.get("Content-Type", "").lower()
-                is_zip = content.startswith(b"PK") or "zip" in content_type
                 logger.info(
-                    "files.fm попытка=%s/%s uhash=%s status=%s content_type=%s final_url=%s is_zip=%s",
+                    "files.fm попытка=%s/%s uhash=%s status=%s content_type=%s url=%s",
                     attempt,
                     retries,
                     uhash,
                     response.status,
                     content_type,
                     response.url,
+                )
+
+                if response.status != 200:
+                    if attempt < retries:
+                        await asyncio.sleep(1)
+                    continue
+
+                downloaded_bytes, prefix = await stream_response_to_file(
+                    response, zip_path
+                )
+                is_zip = prefix.startswith(b"PK")
+                logger.info(
+                    "files.fm загрузка завершена uhash=%s bytes=%s is_zip=%s",
+                    uhash,
+                    downloaded_bytes,
                     is_zip,
                 )
 
-                if response.status == 200 and is_zip:
-                    await asyncio.to_thread(zip_path.write_bytes, content)
+                if is_zip and downloaded_bytes > 0:
                     logger.info(
                         "ZIP получен и сохранен user=%s uhash=%s path=%s bytes=%s",
                         user,
                         uhash,
                         zip_path,
-                        len(content),
+                        downloaded_bytes,
                     )
                     return zip_path
+
+                if zip_path.exists():
+                    zip_path.unlink()
 
             if attempt < retries:
                 logger.warning(
@@ -416,6 +482,25 @@ async def download_files_fm_zip(
     raise ValueError(
         "Не удалось получить ZIP с files.fm после повторных попыток"
     )
+
+
+async def stream_response_to_file(
+    response: aiohttp.ClientResponse, file_path: Path
+) -> tuple[int, bytes]:
+    """Сохраняет HTTP-ответ в файл потоком и возвращает размер и префикс."""
+    downloaded_bytes = 0
+    prefix = b""
+
+    with file_path.open("wb") as file:
+        async for chunk in response.content.iter_chunked(1024 * 1024):
+            if not chunk:
+                continue
+            if not prefix:
+                prefix = chunk[:4]
+            file.write(chunk)
+            downloaded_bytes += len(chunk)
+
+    return downloaded_bytes, prefix
 
 
 async def extract_images_from_zip(
@@ -516,23 +601,105 @@ def image_path_to_base64_data_url(
         return f"data:image/jpeg;base64,{encoded}"
 
 
-async def build_embedded_image_map(
-    image_paths: list[Path],
-) -> dict[str, str]:
-    """Строит словарь local_url -> base64 data URL для карты."""
-    result: dict[str, str] = {}
-    for image_path in image_paths:
-        local_url = local_file_path_to_url(image_path)
-        data_url = await asyncio.to_thread(
-            image_path_to_base64_data_url, image_path
+def placeholder_data_url(source: str) -> str:
+    """Миниатюра-заглушка, если фото не удалось встроить в карту."""
+    label = extract_filename_from_local_url(source)
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="140" height="180">'
+        f'<rect width="100%" height="100%" fill="#222"/>'
+        f'<text x="10" y="90" fill="#ccc" font-size="12">{label[:24]}</text>'
+        f"</svg>"
+    )
+    encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    return f"data:image/svg+xml;base64,{encoded}"
+
+
+def image_path_to_base64_within_budget(
+    image_path: Path, max_bytes: int
+) -> str:
+    """Подбирает сжатие так, чтобы data URL уложился в лимит."""
+    if max_bytes < 300:
+        return placeholder_data_url(image_path.name)
+
+    presets = [
+        (1280, 72),
+        (960, 65),
+        (800, 58),
+        (640, 50),
+        (480, 42),
+        (360, 35),
+        (240, 28),
+    ]
+    smallest = ""
+    for max_side, quality in presets:
+        data_url = image_path_to_base64_data_url(
+            image_path, max_side=max_side, jpeg_quality=quality
         )
-        result[local_url] = data_url
+        smallest = data_url
+        if len(data_url.encode("utf-8")) <= max_bytes:
+            return data_url
+
+    return smallest or placeholder_data_url(image_path.name)
+
+
+async def build_embedded_image_map(
+    local_url_to_path: dict[str, Path],
+    urls_to_embed: list[str],
+    image_budget: int | None = None,
+) -> dict[str, str]:
+    """Строит base64 data URL для карты с учётом лимита 200 MB."""
+    embed_urls = [url for url in urls_to_embed if url in local_url_to_path]
+    if not embed_urls:
+        return {}
+
+    if image_budget is None:
+        image_budget = MAP_MAX_SIZE_BYTES - MAP_HTML_OVERHEAD_BYTES
+    per_image_budget = max(image_budget // len(embed_urls), 8 * 1024)
+
+    result: dict[str, str] = {}
+    for url in embed_urls:
+        data_url = await asyncio.to_thread(
+            image_path_to_base64_within_budget,
+            local_url_to_path[url],
+            per_image_budget,
+        )
+        result[url] = data_url
+
+    total_size = sum(len(value.encode("utf-8")) for value in result.values())
+    while total_size > image_budget and per_image_budget > 4 * 1024:
+        per_image_budget = int(per_image_budget * 0.85)
+        for url in embed_urls:
+            result[url] = await asyncio.to_thread(
+                image_path_to_base64_within_budget,
+                local_url_to_path[url],
+                per_image_budget,
+            )
+        total_size = sum(len(value.encode("utf-8")) for value in result.values())
+
+    logger.info(
+        "Base64 для карты: images=%s budget_mb=%.1f total_mb=%.1f per_image_kb=%.0f",
+        len(embed_urls),
+        image_budget / (1024 * 1024),
+        total_size / (1024 * 1024),
+        per_image_budget / 1024,
+    )
     return result
+
+
+def apply_embedded_images(
+    original_coords: dict[str, list],
+    embedded_image_map: dict[str, str],
+) -> dict[str, list]:
+    """Подставляет base64 data URL вместо локальных ссылок в координатах."""
+    return {
+        embedded_image_map.get(url, placeholder_data_url(url)): coord
+        for url, coord in original_coords.items()
+    }
 
 
 async def get_imgs_from_files_fm(
     url: str, user: int
-) -> tuple[list[str], dict[str, str]]:
+) -> tuple[list[str], dict[str, Path]]:
     """Получает изображения из files.fm через ZIP архив."""
     uhash = extract_files_fm_hash(url)
     if not uhash:
@@ -546,18 +713,20 @@ async def get_imgs_from_files_fm(
         logger.warning(
             "После распаковки нет изображений user=%s uhash=%s", user, uhash
         )
-        return []
+        return [], {}
 
     await ensure_static_server()
     result_urls = [local_file_path_to_url(path) for path in image_paths]
-    embedded_image_map = await build_embedded_image_map(image_paths)
+    local_url_to_path = {
+        local_file_path_to_url(path): path for path in image_paths
+    }
     logger.info(
-        "Подготовлены ссылки для OCR и base64 для карты user=%s uhash=%s count=%s",
+        "Подготовлены ссылки для OCR user=%s uhash=%s count=%s",
         user,
         uhash,
         len(result_urls),
     )
-    return result_urls, embedded_image_map
+    return result_urls, local_url_to_path
 
 
 async def run_bot():
