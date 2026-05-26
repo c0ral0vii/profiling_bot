@@ -10,13 +10,12 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 import aiohttp
-from aiohttp import web
-from PIL import Image
-
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile, Message
+from aiohttp import web
+from PIL import Image
 
 from bot.func.auth import check_password
 from bot.states.fsm import Auth, AuthUser
@@ -43,11 +42,17 @@ user_queues: dict[int, deque[UserTask]] = {}
 user_workers: dict[int, asyncio.Task] = {}
 user_queue_lock = asyncio.Lock()
 
-FILES_FM_DOWNLOAD_URL = (
-    "http://fv5-3.failiem.lv/server_scripts/zip/zip_streamer/upload_zip_streamer.php"
-)
-FILES_FM_DOMAINS = {"files.fm", "ru.files.fm"}
-SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff"}
+FILES_FM_DOWNLOAD_URL = "http://fv5-3.failiem.lv/server_scripts/zip/zip_streamer/upload_zip_streamer.php"
+FILES_FM_DOMAINS = {"files.fm", "ru.files.fm", "ru.files.me", "files.me"}
+SUPPORTED_IMAGE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".bmp",
+    ".gif",
+    ".tiff",
+}
 STATIC_SERVER_PORT = 8765
 MAP_ROOT_PATH = Path("map/generate_map").resolve()
 
@@ -153,7 +158,9 @@ async def check_function(message: Message, state: FSMContext, url: str):
         )
 
 
-async def enqueue_user_task(message: Message, url: str, coord_status: bool) -> int:
+async def enqueue_user_task(
+    message: Message, url: str, coord_status: bool
+) -> int:
     """Добавляет задачу пользователя в очередь и запускает воркер при необходимости."""
     user_id = message.from_user.id
     task = UserTask(
@@ -172,7 +179,9 @@ async def enqueue_user_task(message: Message, url: str, coord_status: bool) -> i
         queued_before = len(queue) if worker_running else len(queue) - 1
 
         if not worker_running:
-            user_workers[user_id] = asyncio.create_task(process_user_queue(user_id))
+            user_workers[user_id] = asyncio.create_task(
+                process_user_queue(user_id)
+            )
 
     return queued_before
 
@@ -232,7 +241,9 @@ async def process_user_task(task: UserTask):
 
         processed_coords = result[0]
         processed_urls = set(processed_coords.keys())
-        unprocessed_urls = [url for url in img_urls if url not in processed_urls]
+        unprocessed_urls = [
+            url for url in img_urls if url not in processed_urls
+        ]
 
         if embedded_image_map:
             processed_coords = {
@@ -244,7 +255,9 @@ async def process_user_task(task: UserTask):
         await safe_delete_message(msg)
 
         await task.message.reply_document(
-            FSInputFile(path=f"map/generate_map/{str(task.user_id)}/leaflet.html"),
+            FSInputFile(
+                path=f"map/generate_map/{str(task.user_id)}/leaflet.html"
+            ),
             caption=f"Готово ✅, {result[-1]}",
         )
 
@@ -294,14 +307,16 @@ async def safe_delete_message(message: Message):
         pass
 
 
-async def send_long_message(text: str, message: Message, max_length: int = 4000):
+async def send_long_message(
+    text: str, message: Message, max_length: int = 4000
+):
     """Отправка длинного сообщения с разбивкой на части"""
     parts = []
 
     # Разбиваем текст на части по max_length символов
     while len(text) > max_length:
         # Ищем последнюю новую строку в пределах max_length
-        split_pos = text.rfind('\n', 0, max_length)
+        split_pos = text.rfind("\n", 0, max_length)
         if split_pos == -1:
             split_pos = max_length
 
@@ -348,7 +363,9 @@ def extract_files_fm_hash(url: str) -> str | None:
     return None
 
 
-async def download_files_fm_zip(uhash: str, user: int, retries: int = 3) -> Path:
+async def download_files_fm_zip(
+    uhash: str, user: int, retries: int = 3
+) -> Path:
     """Скачивает ZIP с files.fm, при необходимости повторяет попытку."""
     user_temp_dir = MAP_ROOT_PATH / str(user) / "temp" / "files_fm"
     user_temp_dir.mkdir(parents=True, exist_ok=True)
@@ -358,7 +375,9 @@ async def download_files_fm_zip(uhash: str, user: int, retries: int = 3) -> Path
     timeout = aiohttp.ClientTimeout(total=45)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for attempt in range(1, retries + 1):
-            async with session.get(FILES_FM_DOWNLOAD_URL, params=params) as response:
+            async with session.get(
+                FILES_FM_DOWNLOAD_URL, params=params
+            ) as response:
                 content = await response.read()
                 content_type = response.headers.get("Content-Type", "").lower()
                 is_zip = content.startswith(b"PK") or "zip" in content_type
@@ -391,10 +410,14 @@ async def download_files_fm_zip(uhash: str, user: int, retries: int = 3) -> Path
                 )
                 await asyncio.sleep(1)
 
-    raise ValueError("Не удалось получить ZIP с files.fm после повторных попыток")
+    raise ValueError(
+        "Не удалось получить ZIP с files.fm после повторных попыток"
+    )
 
 
-async def extract_images_from_zip(zip_path: Path, user: int, uhash: str) -> list[Path]:
+async def extract_images_from_zip(
+    zip_path: Path, user: int, uhash: str
+) -> list[Path]:
     """Распаковывает ZIP и возвращает список файлов изображений."""
     extract_dir = MAP_ROOT_PATH / str(user) / "temp" / "files_fm" / uhash
     extract_dir.mkdir(parents=True, exist_ok=True)
@@ -403,7 +426,8 @@ async def extract_images_from_zip(zip_path: Path, user: int, uhash: str) -> list
     image_paths = sorted(
         file_path
         for file_path in extract_dir.rglob("*")
-        if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
+        if file_path.is_file()
+        and file_path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
     )
     logger.info(
         "ZIP распакован user=%s uhash=%s images_found=%s dir=%s",
@@ -435,13 +459,18 @@ async def ensure_static_server():
     site = web.TCPSite(runner, "127.0.0.1", STATIC_SERVER_PORT)
     await site.start()
     static_server_runner = runner
-    logger.info("Запущен static server для files.fm на 127.0.0.1:%s", STATIC_SERVER_PORT)
+    logger.info(
+        "Запущен static server для files.fm на 127.0.0.1:%s",
+        STATIC_SERVER_PORT,
+    )
 
 
 def local_file_path_to_url(file_path: Path) -> str:
     """Преобразует локальный путь к файлу в URL локального сервера."""
     relative_path = file_path.resolve().relative_to(MAP_ROOT_PATH).as_posix()
-    return f"http://127.0.0.1:{STATIC_SERVER_PORT}/files/{quote(relative_path)}"
+    return (
+        f"http://127.0.0.1:{STATIC_SERVER_PORT}/files/{quote(relative_path)}"
+    )
 
 
 def extract_filename_from_local_url(url: str) -> str:
@@ -474,21 +503,29 @@ async def build_embedded_image_map(
     result: dict[str, str] = {}
     for image_path in image_paths:
         local_url = local_file_path_to_url(image_path)
-        data_url = await asyncio.to_thread(image_path_to_base64_data_url, image_path)
+        data_url = await asyncio.to_thread(
+            image_path_to_base64_data_url, image_path
+        )
         result[local_url] = data_url
     return result
 
 
-async def get_imgs_from_files_fm(url: str, user: int) -> tuple[list[str], dict[str, str]]:
+async def get_imgs_from_files_fm(
+    url: str, user: int
+) -> tuple[list[str], dict[str, str]]:
     """Получает изображения из files.fm через ZIP архив."""
     uhash = extract_files_fm_hash(url)
     if not uhash:
         raise ValueError("Не удалось извлечь идентификатор ссылки files.fm")
 
     zip_path = await download_files_fm_zip(uhash=uhash, user=user)
-    image_paths = await extract_images_from_zip(zip_path=zip_path, user=user, uhash=uhash)
+    image_paths = await extract_images_from_zip(
+        zip_path=zip_path, user=user, uhash=uhash
+    )
     if not image_paths:
-        logger.warning("После распаковки нет изображений user=%s uhash=%s", user, uhash)
+        logger.warning(
+            "После распаковки нет изображений user=%s uhash=%s", user, uhash
+        )
         return []
 
     await ensure_static_server()

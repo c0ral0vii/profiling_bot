@@ -180,7 +180,9 @@ class DebugCoordinateExtractor:
 
                 # Пропускаем явные ложные срабатывания
                 if self.is_false_positive(normalized_text, coord):
-                    logger.debug(f"Ложное срабатывание: '{coord}' в тексте '{text}'")
+                    logger.debug(
+                        f"Ложное срабатывание: '{coord}' в тексте '{text}'"
+                    )
                     continue
 
                 ordered_candidates.append((match.start(), coord))
@@ -189,7 +191,9 @@ class DebugCoordinateExtractor:
         compact_matches = re.finditer(r"[+\-]?\d{7,10}", normalized_text)
         for match in compact_matches:
             token = match.group()
-            repaired = self._repair_compact_coordinate_token(token, coord_status)
+            repaired = self._repair_compact_coordinate_token(
+                token, coord_status
+            )
             if not repaired:
                 continue
             if self.is_false_positive(normalized_text, repaired):
@@ -227,7 +231,9 @@ class DebugCoordinateExtractor:
                 return True
 
         # Специфичные проверки для координат
-        if re.match(r"^\d{1,2}\.\d{1,2}$", coord):  # 10.24 - вероятно не координата
+        if re.match(
+            r"^\d{1,2}\.\d{1,2}$", coord
+        ):  # 10.24 - вероятно не координата
             return True
 
         return False
@@ -259,7 +265,9 @@ def _extract_ocr_results(raw_result) -> List[tuple]:
         if isinstance(res, dict):
             rec_texts = first_not_none(res.get("rec_texts"), [])
             rec_scores = first_not_none(res.get("rec_scores"), [])
-            rec_boxes = first_not_none(res.get("rec_boxes"), res.get("rec_polys"), [])
+            rec_boxes = first_not_none(
+                res.get("rec_boxes"), res.get("rec_polys"), []
+            )
 
         # Объектный формат (на случай отличий между версиями)
         elif hasattr(res, "rec_texts"):
@@ -336,7 +344,9 @@ async def process_img(
                             f"Изображение загружено успешно, размер: {len(img_data)} байт"
                         )
                     else:
-                        logger.error(f"Ошибка загрузки изображения: {response.status}")
+                        logger.error(
+                            f"Ошибка загрузки изображения: {response.status}"
+                        )
                         return f"Ошибка - {img_link}"
 
             img = Image.open(BytesIO(img_data))
@@ -408,14 +418,16 @@ async def process_img(
 
             for i, line in enumerate(ocr_results):
                 bbox, text, confidence = line
-                logger.info(f"Блок {i}: '{text}' (уверенность: {confidence:.2f})")
+                logger.info(
+                    f"Блок {i}: '{text}' (уверенность: {confidence:.2f})"
+                )
 
                 text_variants = [text]
                 if i + 1 < len(ocr_results):
                     next_text = str(ocr_results[i + 1][1]).strip()
-                    if re.fullmatch(r"[+\-]?\d{1,2}", str(text).strip()) and re.match(
-                        r"\d{4,10}", next_text
-                    ):
+                    if re.fullmatch(
+                        r"[+\-]?\d{1,2}", str(text).strip()
+                    ) and re.match(r"\d{4,10}", next_text):
                         merged_text = f"{str(text).strip()}{next_text}"
                         text_variants.append(merged_text)
                         logger.debug(
@@ -426,14 +438,18 @@ async def process_img(
                 improved_coords = []
                 for text_variant in text_variants:
                     # ОРИГИНАЛЬНЫЙ МЕТОД
-                    original_variant = debug_extractor.extract_coordinates_original(
-                        text_variant, coord_status
+                    original_variant = (
+                        debug_extractor.extract_coordinates_original(
+                            text_variant, coord_status
+                        )
                     )
                     original_coords.extend(original_variant)
 
                     # УЛУЧШЕННЫЙ МЕТОД
-                    improved_variant = debug_extractor.extract_coordinates_improved(
-                        text_variant, coord_status
+                    improved_variant = (
+                        debug_extractor.extract_coordinates_improved(
+                            text_variant, coord_status
+                        )
                     )
                     improved_coords.extend(improved_variant)
 
@@ -487,7 +503,9 @@ async def process_img(
                     if cord_pair:
                         ready_coords.append(cord_pair[0].replace(",", "."))
                 if len(ready_coords) == 2:
-                    logger.info(f"ВОЗВРАЩАЕМ КООРДИНАТЫ ИЗ TWO_CORDS: {ready_coords}")
+                    logger.info(
+                        f"ВОЗВРАЩАЕМ КООРДИНАТЫ ИЗ TWO_CORDS: {ready_coords}"
+                    )
                     return {img_link: ready_coords}
 
             logger.info("КООРДИНАТЫ НЕ НАЙДЕНЫ")
@@ -497,7 +515,9 @@ async def process_img(
             logger.error(f"Таймаут при обработке {img_link}")
             return f"Таймаут - {img_link}"
         except Exception as e:
-            logger.error(f"Ошибка обработки {img_link}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Ошибка обработки {img_link}: {str(e)}", exc_info=True
+            )
             return f"Ошибка обработки - {img_link}: {str(e)}"
 
 
@@ -507,7 +527,7 @@ task_list = set()
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
     """PaddleOCR PP-OCRv5 смотрит фотографию и ищет координаты на нём"""
 
-    semaphore = asyncio.Semaphore(4)
+    semaphore = asyncio.Semaphore(6)
     tasks = [
         asyncio.create_task(process_img(img_link, semaphore, coord_status))
         for img_link in img_urls
@@ -523,7 +543,12 @@ async def check_img(img_urls: list, coord_status: bool = False) -> list:
             task_list.discard(task)
 
     coordinates = {}
-    stats = {"total": len(img_urls), "success": 0, "errors": 0, "with_coords": 0}
+    stats = {
+        "total": len(img_urls),
+        "success": 0,
+        "errors": 0,
+        "with_coords": 0,
+    }
 
     for result in results:
         if isinstance(result, Exception):
@@ -533,7 +558,9 @@ async def check_img(img_urls: list, coord_status: bool = False) -> list:
             coordinates.update(result)
             stats["success"] += 1
             stats["with_coords"] += 1
-            logger.info(f"Успешно обработан с координатами: {list(result.keys())[0]}")
+            logger.info(
+                f"Успешно обработан с координатами: {list(result.keys())[0]}"
+            )
         elif isinstance(result, str) and result.startswith("Ошибка"):
             logger.error(f"Ошибка обработки: {result}")
             stats["errors"] += 1
