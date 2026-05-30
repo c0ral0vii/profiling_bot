@@ -248,10 +248,6 @@ async def process_user_task(task: UserTask):
         await msg.edit_text(" ✅Координаты получены, создаём карту...")
 
         processed_coords = result[0]
-        processed_urls = set(processed_coords.keys())
-        unprocessed_urls = [
-            url for url in img_urls if url not in processed_urls
-        ]
         original_coords = dict(processed_coords)
         map_path = Path(f"map/generate_map/{task.user_id}/leaflet.html")
 
@@ -320,31 +316,6 @@ async def safe_delete_message(message: Message):
         await message.delete()
     except Exception:
         pass
-
-
-async def send_long_message(
-    text: str, message: Message, max_length: int = 4000
-):
-    """Отправка длинного сообщения с разбивкой на части"""
-    parts = []
-
-    # Разбиваем текст на части по max_length символов
-    while len(text) > max_length:
-        # Ищем последнюю новую строку в пределах max_length
-        split_pos = text.rfind("\n", 0, max_length)
-        if split_pos == -1:
-            split_pos = max_length
-
-        parts.append(text[:split_pos])
-        text = text[split_pos:].lstrip()
-
-    if text:
-        parts.append(text)
-
-    # Отправляем каждую часть
-    for part in parts:
-        if part.strip():
-            await message.answer(part)
 
 
 def extract_supported_url(text: str) -> str | None:
