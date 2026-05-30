@@ -57,7 +57,9 @@ SUPPORTED_IMAGE_EXTENSIONS = {
 }
 STATIC_SERVER_PORT = 8765
 MAP_ROOT_PATH = Path("map/generate_map").resolve()
-MAP_MAX_SIZE_BYTES = 200 * 1024 * 1024
+# Лимит Bot API при upload через multipart/form-data — 50 MB.
+TELEGRAM_MAX_DOCUMENT_BYTES = 50 * 1024 * 1024
+MAP_MAX_SIZE_BYTES = 48 * 1024 * 1024
 MAP_HTML_OVERHEAD_BYTES = 512 * 1024
 
 static_server_runner: web.AppRunner | None = None
@@ -251,36 +253,16 @@ async def process_user_task(task: UserTask):
             url for url in img_urls if url not in processed_urls
         ]
         original_coords = dict(processed_coords)
+        map_path = Path(f"map/generate_map/{task.user_id}/leaflet.html")
 
         if local_url_to_path:
-            coords_urls = list(original_coords.keys())
-            embedded_image_map = await build_embedded_image_map(
+            processed_coords, map_path = await ensure_map_within_size_limit(
+                user_id=task.user_id,
+                original_coords=original_coords,
                 local_url_to_path=local_url_to_path,
-                urls_to_embed=coords_urls,
+                coords_urls=list(original_coords.keys()),
             )
-            processed_coords = apply_embedded_images(
-                original_coords, embedded_image_map
-            )
-
-        await create_html(coords=processed_coords, user=task.user_id)
-        map_path = Path(f"map/generate_map/{task.user_id}/leaflet.html")
-        if local_url_to_path and map_path.stat().st_size > MAP_MAX_SIZE_BYTES:
-            logger.warning(
-                "Карта %.1f MB > лимита, повторное сжатие user=%s",
-                map_path.stat().st_size / (1024 * 1024),
-                task.user_id,
-            )
-            tighter_budget = int(
-                (MAP_MAX_SIZE_BYTES - MAP_HTML_OVERHEAD_BYTES) * 0.75
-            )
-            embedded_image_map = await build_embedded_image_map(
-                local_url_to_path=local_url_to_path,
-                urls_to_embed=coords_urls,
-                image_budget=tighter_budget,
-            )
-            processed_coords = apply_embedded_images(
-                original_coords, embedded_image_map
-            )
+        else:
             await create_html(coords=processed_coords, user=task.user_id)
 
         map_size_mb = map_path.stat().st_size / (1024 * 1024)
@@ -292,22 +274,14 @@ async def process_user_task(task: UserTask):
         await safe_delete_message(msg)
 
         caption = f"Готово ✅, {result[-1]}"
-        if local_url_to_path and map_size_mb > 150:
+        if map_size_mb > 30:
             caption += f" (карта {map_size_mb:.0f} MB)"
 
-        await task.message.reply_document(
-            FSInputFile(path=str(map_path)),
+        await send_map_document(
+            message=task.message,
+            map_path=map_path,
             caption=caption,
         )
-
-        if unprocessed_urls:
-            links_message = "📸 Необработанные изображения:\n"
-            for i, url in enumerate(unprocessed_urls, 1):
-                link_or_name = extract_filename_from_local_url(url)
-                links_message += f"{i}. {link_or_name}\n"
-
-            await send_long_message(links_message, task.message)
-
     except asyncio.CancelledError:
         await safe_delete_message(msg)
         raise
@@ -422,7 +396,9 @@ async def download_files_fm_zip(
     }
 
     timeout = aiohttp.ClientTimeout(total=FILES_FM_DOWNLOAD_TIMEOUT)
-    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+    async with aiohttp.ClientSession(
+        timeout=timeout, headers=headers
+    ) as session:
         for attempt in range(1, retries + 1):
             if zip_path.exists():
                 zip_path.unlink()
@@ -647,7 +623,7 @@ async def build_embedded_image_map(
     urls_to_embed: list[str],
     image_budget: int | None = None,
 ) -> dict[str, str]:
-    """Строит base64 data URL для карты с учётом лимита 200 MB."""
+    """Строит base64 data URL для карты с учётом лимита Telegram (48 MB)."""
     embed_urls = [url for url in urls_to_embed if url in local_url_to_path]
     if not embed_urls:
         return {}
@@ -674,7 +650,9 @@ async def build_embedded_image_map(
                 local_url_to_path[url],
                 per_image_budget,
             )
-        total_size = sum(len(value.encode("utf-8")) for value in result.values())
+        total_size = sum(
+            len(value.encode("utf-8")) for value in result.values()
+        )
 
     logger.info(
         "Base64 для карты: images=%s budget_mb=%.1f total_mb=%.1f per_image_kb=%.0f",
@@ -695,6 +673,94 @@ def apply_embedded_images(
         embedded_image_map.get(url, placeholder_data_url(url)): coord
         for url, coord in original_coords.items()
     }
+
+
+async def ensure_map_within_size_limit(
+    user_id: int,
+    original_coords: dict[str, list],
+    local_url_to_path: dict[str, Path],
+    coords_urls: list[str],
+) -> tuple[dict[str, list], Path]:
+    """Пересжимает карту, пока HTML не влезет в лимит Telegram."""
+    map_path = MAP_ROOT_PATH / str(user_id) / "leaflet.html"
+    budgets = [
+        MAP_MAX_SIZE_BYTES - MAP_HTML_OVERHEAD_BYTES,
+        int((MAP_MAX_SIZE_BYTES - MAP_HTML_OVERHEAD_BYTES) * 0.75),
+        int((MAP_MAX_SIZE_BYTES - MAP_HTML_OVERHEAD_BYTES) * 0.55),
+        int((MAP_MAX_SIZE_BYTES - MAP_HTML_OVERHEAD_BYTES) * 0.4),
+    ]
+
+    processed_coords: dict[str, list] = {}
+    for budget in budgets:
+        embedded_image_map = await build_embedded_image_map(
+            local_url_to_path=local_url_to_path,
+            urls_to_embed=coords_urls,
+            image_budget=budget,
+        )
+        processed_coords = apply_embedded_images(
+            original_coords, embedded_image_map
+        )
+        await create_html(coords=processed_coords, user=user_id)
+        if map_path.stat().st_size <= MAP_MAX_SIZE_BYTES:
+            return processed_coords, map_path
+
+        logger.warning(
+            "Карта %.1f MB > лимита %.1f MB, budget=%.0f KB",
+            map_path.stat().st_size / (1024 * 1024),
+            MAP_MAX_SIZE_BYTES / (1024 * 1024),
+            budget / 1024,
+        )
+
+    return processed_coords, map_path
+
+
+def prepare_map_upload_path(map_path: Path) -> Path:
+    """Готовит файл для отправки в Telegram (при необходимости упаковывает в ZIP)."""
+    if map_path.stat().st_size <= TELEGRAM_MAX_DOCUMENT_BYTES:
+        return map_path
+
+    zip_path = map_path.with_suffix(".html.zip")
+    with zipfile.ZipFile(
+        zip_path, "w", compression=zipfile.ZIP_DEFLATED
+    ) as archive:
+        archive.write(map_path, arcname="leaflet.html")
+
+    if zip_path.stat().st_size <= TELEGRAM_MAX_DOCUMENT_BYTES:
+        return zip_path
+
+    zip_path.unlink(missing_ok=True)
+    return map_path
+
+
+async def send_map_document(
+    message: Message, map_path: Path, caption: str
+) -> None:
+    """Отправляет карту пользователю с учётом лимита 50 MB Bot API."""
+    send_path = await asyncio.to_thread(prepare_map_upload_path, map_path)
+    file_size = send_path.stat().st_size
+    size_mb = file_size / (1024 * 1024)
+
+    if file_size > TELEGRAM_MAX_DOCUMENT_BYTES:
+        await message.answer(
+            "Карта готова, но слишком большая для отправки в Telegram "
+            f"({size_mb:.1f} MB, лимит 50 MB).\n"
+            "Попробуйте архив с меньшим числом фотографий — "
+            "в Telegram встраиваются только снимки с найденными координатами."
+        )
+        logger.error(
+            "Не удалось отправить карту: size_mb=%.2f path=%s",
+            size_mb,
+            send_path,
+        )
+        return
+
+    if send_path.suffix == ".zip":
+        caption += " (архив ZIP, распакуйте leaflet.html)"
+
+    await message.reply_document(
+        FSInputFile(path=str(send_path)),
+        caption=caption,
+    )
 
 
 async def get_imgs_from_files_fm(

@@ -1,7 +1,9 @@
+from urllib.parse import quote
+
 import aiofiles
 import aiohttp
-from urllib.parse import quote
 from bs4 import BeautifulSoup
+
 from .download import get_source_html
 
 
@@ -24,7 +26,7 @@ async def get_imgs(url: str, user: int):
     try:
         # Получаем и сохраняем HTML страницу
         file_path = await get_source_html(url=url, user=user)
-        
+
         # Открываем сохранённый файл для парсинга
         async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
             soup = BeautifulSoup(await f.read(), "lxml")
@@ -39,31 +41,31 @@ async def get_imgs(url: str, user: int):
     if "gallery" in url:
         # Находим все элементы с миниатюрами
         thumb_containers = soup.find_all("div", class_="col")
-        
+
         for container in thumb_containers:
             # Извлекаем hotlink из data-атрибутов
             hotlink = container.get("data-hotlink")
             image_name = container.get("data-name")
             image_ext = container.get("data-ext")
-            
+
             if hotlink and image_name and image_ext:
                 # Формируем прямую ссылку на изображение (кодируем пробелы)
                 encoded_name = quote(f"{image_name}.{image_ext}", safe="")
                 img_url = f"https://i.postimg.cc/{hotlink}/{encoded_name}"
                 img_urls.append(img_url)
-    
+
     # Если это страница отдельного изображения (вторая страница)
     else:
         # Способ 1: Ищем в мета-тегах OpenGraph
         og_image = soup.find("meta", property="og:image")
         if og_image and og_image.get("content"):
             img_urls.append(og_image["content"])
-            
+
         # Способ 2: Ищем основной элемент изображения
         main_image = soup.find("img", id="main-image")
         if main_image and main_image.get("src"):
             img_urls.append(main_image["src"])
-            
+
         # Способ 3: Ищем в поле "Direct link"
         direct_link = soup.find("input", id="code_direct")
         if direct_link and direct_link.get("value"):
@@ -76,6 +78,11 @@ async def get_imgs(url: str, user: int):
         if url not in seen:
             seen.add(url)
             unique_urls.append(url)
-
-    print(unique_urls)    
     return unique_urls
+
+
+class FilesFmParser:
+    def __init__(self, url: str):
+        self.url = url
+
+    async def get_imgs(self, user: int): ...
