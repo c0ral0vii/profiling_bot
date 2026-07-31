@@ -24,7 +24,7 @@ from config.config import BOT_API_TOKEN, filesharings
 from kb.main_menu import main_menu_keyboard
 from map.files import create_new_user
 from map.main import create_html
-from map.parsing import get_imgs
+from map.parsing import get_imgs, get_imgs_from_5sek, is_5sek_url
 from ocr.main import check_img
 
 dp = Dispatcher()
@@ -232,6 +232,13 @@ async def process_user_task(task: UserTask):
                 url=task.url,
                 user=task.user_id,
             )
+        elif is_5sek_url(task.url):
+            logger.info(
+                "Начата обработка 5sek.cc ссылки user=%s url=%s",
+                task.user_id,
+                task.url,
+            )
+            img_urls = await get_imgs_from_5sek(url=task.url)
         else:
             img_urls = await get_imgs(url=task.url, user=task.user_id)
 
@@ -328,6 +335,8 @@ def extract_supported_url(text: str) -> str | None:
         if any(filesharing in host for filesharing in filesharings):
             return url
         if is_files_fm_url(url):
+            return url
+        if is_5sek_url(url):
             return url
     return None
 

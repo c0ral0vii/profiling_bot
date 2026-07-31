@@ -7,7 +7,7 @@ load_dotenv()
 
 
 # Допустимые файлообменники
-filesharings = ["postimg"]
+filesharings = ["postimg", "5sek"]
 
 # Генерация имён у фотографий
 filename = ("imlist" "age_") + str(uuid.uuid4()) + ".jpg"
