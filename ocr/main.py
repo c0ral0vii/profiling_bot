@@ -63,7 +63,7 @@ class DebugCoordinateExtractor:
     def __init__(self):
         self.original_patterns = {
             False: r"([1-9]\d[.,]\d{4,6})",  # Оригинальный паттерн для coord_status=False
-            True: r"([1-9]+[.,]\d{4,6})",  # Оригинальный паттерн для coord_status=True
+            True: r"([1-9]\d{0,2}[.,]\d{4,6})",  # Тайланд: 13.xxx и 100.xxx
         }
 
         # Черный список для фильтрации ложных срабатываний
@@ -164,7 +164,7 @@ class DebugCoordinateExtractor:
 
         if coord_status:
             patterns = [
-                r"[1-9]+[.,]\d{4,8}",  # Оригинальный + расширенный
+                r"[1-9]\d{0,2}[.,]\d{4,8}",  # Тайланд: 13.xxx и 100.xxx
             ]
         else:
             patterns = [
