@@ -1,6 +1,6 @@
 # ❌ БЫЛО: FROM alpine:3.21
 # ✅ СТАЛО: Debian с glibc
-FROM python:3.10-slim-bookworm
+FROM python:3.11-slim-bookworm
 
 ENV PATH="/root/.local/bin:${PATH}"
 WORKDIR /app
@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-RUN uv python install 3.10
+RUN uv python install 3.11
 
 COPY . .
 RUN chmod +x ./scripts/*.sh
