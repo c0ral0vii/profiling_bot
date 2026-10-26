@@ -87,6 +87,49 @@ class DebugCoordinateExtractor:
         text = re.sub(r"([+\-]\d{1,2})\s+(\d{4,10})", r"\1\2", text)
         return text
 
+    def extract_labeled_dms_coordinates(self, text: str) -> dict[str, str]:
+        """Извлекает подписанные Lat/Long координаты в формате DMS."""
+        pattern = re.compile(
+            r"\b(?P<label>lat(?:itude)?|lon(?:g|gitude)?|long(?:itude)?)"
+            r"\s*[:=]?\s*"
+            r"(?P<sign>[+\-])?\s*"
+            r"(?P<degrees>\d{1,3})\s*[°º]\s*"
+            r"(?P<minutes>\d{1,2})\s*['’′]\s*"
+            r"(?P<seconds>\d{1,2}(?:[.,]\d+)?)\s*"
+            r"(?:[\"”″]|'{2})?\s*"
+            r"(?P<hemisphere>[NSEW])?",
+            re.IGNORECASE,
+        )
+        coordinates = {}
+
+        for match in pattern.finditer(text):
+            label = match.group("label").lower()
+            coordinate_type = "lat" if label.startswith("lat") else "long"
+            degrees = int(match.group("degrees"))
+            minutes = int(match.group("minutes"))
+            seconds = float(match.group("seconds").replace(",", "."))
+            hemisphere = (match.group("hemisphere") or "").upper()
+            max_degrees = 90 if coordinate_type == "lat" else 180
+
+            if degrees > max_degrees or minutes >= 60 or seconds >= 60:
+                continue
+            if degrees == max_degrees and (minutes or seconds):
+                continue
+            if hemisphere and hemisphere not in (
+                ("N", "S") if coordinate_type == "lat" else ("E", "W")
+            ):
+                continue
+
+            decimal = degrees + minutes / 60 + seconds / 3600
+            if match.group("sign") == "-" or hemisphere in {"S", "W"}:
+                decimal = -decimal
+            coordinates[coordinate_type] = f"{decimal:.6f}"
+
+        logger.debug(
+            f"DMS-МЕТОД: текст='{text}', найдено={coordinates}"
+        )
+        return coordinates
+
     def _repair_compact_coordinate_token(
         self, token: str, coord_status: bool = False
     ) -> str | None:
@@ -150,7 +193,14 @@ class DebugCoordinateExtractor:
         """Оригинальный метод извлечения координат"""
         pattern = self.original_patterns[coord_status]
         normalized_text = self.normalize_text_for_coords(text)
-        coords = re.findall(pattern, normalized_text)
+        validation_text = f"{text} {normalized_text}"
+        coords = [
+            coord
+            for coord in re.findall(pattern, normalized_text)
+            if not self.is_false_positive(
+                validation_text, coord.replace(",", ".")
+            )
+        ]
         logger.debug(
             f"ОРИГИНАЛЬНЫЙ МЕТОД: текст='{text}', normalized='{normalized_text}', паттерн='{pattern}', найдено={coords}"
         )
@@ -161,6 +211,7 @@ class DebugCoordinateExtractor:
     ) -> List[str]:
         """Улучшенный метод извлечения координат"""
         normalized_text = self.normalize_text_for_coords(text)
+        validation_text = f"{text} {normalized_text}"
 
         if coord_status:
             patterns = [
@@ -179,7 +230,7 @@ class DebugCoordinateExtractor:
                 coord = coord.replace(",", ".")
 
                 # Пропускаем явные ложные срабатывания
-                if self.is_false_positive(normalized_text, coord):
+                if self.is_false_positive(validation_text, coord):
                     logger.debug(
                         f"Ложное срабатывание: '{coord}' в тексте '{text}'"
                     )
@@ -196,7 +247,7 @@ class DebugCoordinateExtractor:
             )
             if not repaired:
                 continue
-            if self.is_false_positive(normalized_text, repaired):
+            if self.is_false_positive(validation_text, repaired):
                 continue
             ordered_candidates.append((match.start(), repaired))
 
@@ -411,6 +462,7 @@ async def process_img(
 
             two_cords = []
             coordinates = {}
+            labeled_coordinates = {}
 
             # ТЕСТ: сравниваем оба метода
             all_original_coords = []
@@ -437,6 +489,12 @@ async def process_img(
                 original_coords = []
                 improved_coords = []
                 for text_variant in text_variants:
+                    labeled_coordinates.update(
+                        debug_extractor.extract_labeled_dms_coordinates(
+                            text_variant
+                        )
+                    )
+
                     # ОРИГИНАЛЬНЫЙ МЕТОД
                     original_variant = (
                         debug_extractor.extract_coordinates_original(
@@ -492,6 +550,16 @@ async def process_img(
             logger.info(f"Улучшенный метод: {all_improved_coords}")
             logger.info(f"Two_cords: {two_cords}")
 
+            if {"lat", "long"}.issubset(labeled_coordinates):
+                ready_coords = [
+                    labeled_coordinates["lat"],
+                    labeled_coordinates["long"],
+                ]
+                logger.info(
+                    f"DMS-МЕТОД НАШЕЛ ПОДПИСАННЫЕ КООРДИНАТЫ: {ready_coords}"
+                )
+                return {img_link: ready_coords}
+
             if coordinates:
                 logger.info(f"ВОЗВРАЩАЕМ КООРДИНАТЫ: {coordinates[img_link]}")
                 return coordinates
@@ -525,7 +593,7 @@ task_list = set()
 
 
 async def check_img(img_urls: list, coord_status: bool = False) -> list:
-    """PaddleOCR PP-OCRv5 смотрит фотографию и ищет координаты на нём"""
+    """PaddleOCR PP-OCRv6 смотрит фотографию и ищет координаты на нём"""
 
     semaphore = asyncio.Semaphore(4)
     tasks = [
