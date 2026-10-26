@@ -32,11 +32,11 @@ ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
-# Инициализация PaddleOCR PP-OCRv5 (глобальный экземпляр)
+# Инициализация PaddleOCR PP-OCRv6 (глобальный экземпляр)
 # приводит к падению вида ConvertPirAttribute2RuntimeAttribute/oneDNN.
 ocr_kwargs = {
-    "text_detection_model_name": "PP-OCRv5_mobile_det",
-    "text_recognition_model_name": "PP-OCRv5_mobile_rec",
+    "text_detection_model_name": "PP-OCRv6_small_det",
+    "text_recognition_model_name": "PP-OCRv6_small_rec",
     "use_doc_orientation_classify": False,
     "use_doc_unwarping": False,
     "use_textline_orientation": False,
@@ -352,7 +352,7 @@ async def process_img(
             img = Image.open(BytesIO(img_data))
             img_processed = debug_extractor.enhance_image_quality(img)
 
-            # Распознавание текста через PaddleOCR PP-OCRv5.
+            # Распознавание текста через PaddleOCR PP-OCRv6.
             # Для скриншотов с мелким текстом делаем более чувствительный проход.
             result = ocr.predict(
                 img_processed,
